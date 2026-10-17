@@ -47,7 +47,6 @@ final class MacUnlocker {
 
         switch mode {
         case .wakeOnly:
-            // Just wake the screen without sending password keystrokes
             break
 
         case .autoUnlock:
@@ -55,14 +54,14 @@ final class MacUnlocker {
                 return
             }
 
-            // Give the display and lockscreen 0.65s to fully wake and focus the password box
-            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.65) { [weak self] in
+            // Allow display and lockscreen 0.7s to wake and stabilize input focus
+            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.7) { [weak self] in
                 self?.typePassword(password)
             }
         }
     }
 
-    /// Wakes the display cleanly via caffeinate and mouse jitter (no modifier keys).
+    /// Wakes the display cleanly via caffeinate and subtle cursor jitter (no keyboard keys or shortcuts).
     private func wakeDisplay() {
         var assertionID: IOPMAssertionID = 0
         let reason = "Lookt Face ID Match Wake" as CFString
@@ -92,37 +91,36 @@ final class MacUnlocker {
         }
     }
 
-    /// Simulates typing the password and pressing Return using hardware-level keycodes.
-    /// Explicitly sets flags to prevent any accidental screenshot or system shortcut chords.
+    /// Simulates typing the password cleanly without doubling or clipping keystrokes.
+    /// Strictly posts to cghidEventTap only with a natural key-hold duration.
     private func typePassword(_ password: String) {
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
 
-        // 1. Safely clear any leftover input by pressing Delete 10 times with zero modifier flags
-        for _ in 0..<10 {
-            sendKey(keyCode: 0x33, flags: [], source: source) // Delete
-            usleep(8_000)
+        // 1. Clear any accidental character by sending Delete keypresses cleanly
+        for _ in 0..<8 {
+            sendSingleKey(keyCode: 0x33, flags: [], source: source) // Delete
+            usleep(20_000)
         }
-        usleep(40_000)
+        usleep(60_000) // 60ms pause before typing
 
-        // 2. Type each character mapped to exact macOS CGKeyCode + Shift flag
+        // 2. Type each character with hardware-accurate keycode, shift flag, and natural hold
         for char in password {
             if let mapping = Self.keyMapping(for: char) {
                 let flags: CGEventFlags = mapping.needsShift ? [.maskShift] : []
-                sendKey(keyCode: mapping.keyCode, flags: flags, unicodeChar: char, source: source)
-                usleep(16_000) // 16ms between keystrokes
+                sendSingleKey(keyCode: mapping.keyCode, flags: flags, unicodeChar: char, source: source)
             } else {
-                // Fallback for uncommon characters
-                sendUnicode(char: char, source: source)
-                usleep(16_000)
+                sendSingleUnicode(char: char, source: source)
             }
+            // 35ms cadence between characters to let WindowServer securely process each character
+            usleep(35_000)
         }
 
-        // 3. Pause 100ms and send Return to submit the password
-        usleep(100_000)
-        sendKey(keyCode: 0x24, flags: [], source: source) // Return / Enter
+        // 3. Pause 120ms then send Return to submit the password
+        usleep(120_000)
+        sendSingleKey(keyCode: 0x24, flags: [], source: source) // Return / Enter
     }
 
-    private func sendKey(keyCode: CGKeyCode, flags: CGEventFlags, unicodeChar: Character? = nil, source: CGEventSource) {
+    private func sendSingleKey(keyCode: CGKeyCode, flags: CGEventFlags, unicodeChar: Character? = nil, source: CGEventSource) {
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else { return }
 
@@ -135,13 +133,13 @@ final class MacUnlocker {
             keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &codeUnit)
         }
 
+        // Post ONLY to cghidEventTap to prevent event duplication
         keyDown.post(tap: .cghidEventTap)
+        usleep(16_000) // 16ms natural hardware key hold duration
         keyUp.post(tap: .cghidEventTap)
-        keyDown.post(tap: .cgSessionEventTap)
-        keyUp.post(tap: .cgSessionEventTap)
     }
 
-    private func sendUnicode(char: Character, source: CGEventSource) {
+    private func sendSingleUnicode(char: Character, source: CGEventSource) {
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else { return }
 
@@ -153,10 +151,11 @@ final class MacUnlocker {
         keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &codeUnit)
 
         keyDown.post(tap: .cghidEventTap)
+        usleep(16_000)
         keyUp.post(tap: .cghidEventTap)
     }
 
-    // MARK: - Hardware Keycode Translation Table
+    // MARK: - Hardware Keycode Translation Table (US / ABC Keyboard)
 
     private struct KeyMapping {
         let keyCode: CGKeyCode

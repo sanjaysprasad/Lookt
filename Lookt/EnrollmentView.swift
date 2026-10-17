@@ -463,12 +463,13 @@ private struct EnrollmentModalView: View {
     }
 }
 
-// MARK: - Password Setup Modal Sheet
+// MARK: - Password Setup Modal Sheet (With Show/Hide Password Eye Toggle)
 
 private struct PasswordSetupModalView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
+    @State private var showPassword: Bool = false
     @State private var errorMessage: String = ""
 
     var body: some View {
@@ -482,11 +483,32 @@ private struct PasswordSetupModalView: View {
                 .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: 10) {
-                SecureField("Mac Login Password", text: $password)
-                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    if showPassword {
+                        TextField("Mac Login Password", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        SecureField("Mac Login Password", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                    }
 
-                SecureField("Confirm Password", text: $confirmPassword)
-                    .textFieldStyle(.roundedBorder)
+                    Button {
+                        showPassword.toggle()
+                    } label: {
+                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(showPassword ? "Hide password" : "Show password")
+                }
+
+                if showPassword {
+                    TextField("Confirm Password", text: $confirmPassword)
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    SecureField("Confirm Password", text: $confirmPassword)
+                        .textFieldStyle(.roundedBorder)
+                }
 
                 if !errorMessage.isEmpty {
                     Text(errorMessage)

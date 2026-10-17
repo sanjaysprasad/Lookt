@@ -22,7 +22,9 @@ final class FaceAuthController {
     private let matchThreshold: Float = 0.78
     private var isAuthenticating = false
 
-    func beginAuthAttempt() { startAuthAttempt() }
+    func beginAuthAttempt() {
+        startAuthAttempt()
+    }
 
     func startAuthAttempt() {
         guard !isAuthenticating else { return }
@@ -32,7 +34,21 @@ final class FaceAuthController {
         guard isEnabled else { return }
 
         let profiles = KeychainStore.loadProfiles()
-        let referenceEmbeddings = profiles.flatMap(\.embeddings)
+        let neuralProfiles = profiles.filter { ($0.embeddings.first?.count ?? 0) == 522 }
+
+        // If only legacy profiles exist, inform user directly via Dynamic Island
+        guard !neuralProfiles.isEmpty else {
+            if !profiles.isEmpty {
+                NotificationCenter.default.post(
+                    name: .looktFailed,
+                    object: nil,
+                    userInfo: ["subtitle": "Re-enroll face in app"]
+                )
+            }
+            return
+        }
+
+        let referenceEmbeddings = neuralProfiles.flatMap(\.embeddings)
         guard !referenceEmbeddings.isEmpty else { return }
 
         isAuthenticating = true
@@ -50,7 +66,7 @@ final class FaceAuthController {
         camera.requestAccessAndStart { [weak self] granted in
             guard let self = self else { return }
             guard granted else {
-                self.cancelAuthAttempt(notifyScanEnded: true)
+                self.onAuthFailed(reason: "Camera access denied")
                 return
             }
             self.subscribeToCamera(referenceEmbeddings: referenceEmbeddings)
@@ -114,30 +130,35 @@ final class FaceAuthController {
 
     private func armTimeout() {
         let workItem = DispatchWorkItem { [weak self] in
-            self?.cancelAuthAttempt(notifyScanEnded: true)
+            self?.onAuthFailed(reason: "Use Touch ID or Password")
         }
         timeoutWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
     }
 
     private func onAuthSuccess() {
-        // Stop camera and restore brightness without posting looktScanEnded
         cancelAuthAttempt(notifyScanEnded: false)
-
-        // Show the success animation over the lock screen
         NotificationCenter.default.post(name: .looktMatched, object: nil)
 
-        // Read user's chosen unlock mode
         let modeRaw = UserDefaults.standard.string(forKey: "unlockMode") ?? UnlockMode.autoUnlock.rawValue
         let mode = UnlockMode(rawValue: modeRaw) ?? .autoUnlock
 
-        // Perform unlock via MacUnlocker
         MacUnlocker.shared.performUnlock(mode: mode)
+    }
+
+    private func onAuthFailed(reason: String) {
+        cancelAuthAttempt(notifyScanEnded: false)
+        NotificationCenter.default.post(
+            name: .looktFailed,
+            object: nil,
+            userInfo: ["subtitle": reason]
+        )
     }
 }
 
 extension Notification.Name {
     static let looktMatched = Notification.Name("LooktMatched")
+    static let looktFailed = Notification.Name("LooktFailed")
     static let looktScanStarted = Notification.Name("LooktScanStarted")
     static let looktScanEnded = Notification.Name("LooktScanEnded")
 }

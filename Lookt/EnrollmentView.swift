@@ -122,25 +122,42 @@ struct EnrollmentView: View {
                 .buttonStyle(.borderedProminent)
             }
 
-            let hasLegacyProfiles = profiles.contains { ($0.embeddings.first?.count ?? 0) != 522 }
-            if hasLegacyProfiles {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "exclamationmark.shield.fill")
-                        .foregroundColor(.orange)
-                        .font(.title3)
+            let legacyProfiles = profiles.filter { ($0.embeddings.first?.count ?? 0) != 522 }
+            if !legacyProfiles.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "exclamationmark.shield.fill")
+                            .foregroundColor(.orange)
+                            .font(.title3)
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Security Upgrade Available")
-                            .font(.callout).bold()
-                        Text("Your registered profile was saved with the legacy model. Please delete it below and re-enroll to activate Apple Neural Face ID and anti-photo protection.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Security Upgrade Required")
+                                .font(.callout).bold()
+                            Text("Your face profile was saved with the previous model. Please re-enroll now to activate Apple Neural Face ID and anti-photo protection.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
                     }
 
-                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            for legacy in legacyProfiles {
+                                _ = KeychainStore.deleteProfile(id: legacy.id)
+                            }
+                            refreshData()
+                            isShowingEnrollmentSheet = true
+                        } label: {
+                            Label("Upgrade & Re-Enroll Now", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                    }
                 }
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.12)))
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.orange.opacity(0.12)))
             }
 
             if profiles.isEmpty {
@@ -362,7 +379,7 @@ private struct FaceTestSection: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(profiles.isEmpty)
+                .disabled(profiles.isEmpty || !profiles.contains { ($0.embeddings.first?.count ?? 0) == 522 })
             }
 
             if isRunning || test.scanState != .idle {

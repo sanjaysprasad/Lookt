@@ -13,12 +13,26 @@ final class OverlayPanelController {
     func start() {
         NotificationCenter.default.publisher(for: .looktScanStarted)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.show(state: .scanning) }
+            .sink { [weak self] note in
+                let sub = note.userInfo?["subtitle"] as? String ?? ""
+                self?.show(state: .scanning, subtitle: sub)
+            }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktMatched)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.show(state: .success, autoHideAfter: 2.2) }
+            .sink { [weak self] note in
+                let sub = note.userInfo?["subtitle"] as? String ?? ""
+                self?.show(state: .success, subtitle: sub, autoHideAfter: 2.2)
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .looktFailed)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                let sub = note.userInfo?["subtitle"] as? String ?? "Use Touch ID or Password"
+                self?.show(state: .failed, subtitle: sub, autoHideAfter: 2.5)
+            }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktScanEnded)
@@ -27,11 +41,11 @@ final class OverlayPanelController {
             .store(in: &cancellables)
     }
 
-    private func show(state: ScanState, autoHideAfter: TimeInterval? = nil) {
+    private func show(state: ScanState, subtitle: String = "", autoHideAfter: TimeInterval? = nil) {
         dispatchPrecondition(condition: .onQueue(.main))
         hideWorkItem?.cancel()
 
-        let islandView = DynamicIslandView(state: state)
+        let islandView = DynamicIslandView(state: state, subtitle: subtitle)
 
         if panel == nil {
             let hosting = NSHostingController(rootView: islandView)
@@ -74,21 +88,26 @@ final class OverlayPanelController {
         }
     }
 
-    private func hide() {
-        dispatchPrecondition(condition: .onQueue(.main))
-        hideWorkItem?.cancel()
-        panel?.orderOut(nil)
-    }
-
     private func positionAtNotch() {
         guard let panel = panel else { return }
-        // Fall back to first screen if main screen is nil during lock / wake
+        // When screen is locked, NSScreen.main can be nil -> fallback to NSScreen.screens.first
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
         let screenFrame = screen.frame
-        let x = screenFrame.midX - panel.frame.width / 2
-        // Flush against the top bezel of the screen directly at the notch
-        let y = screenFrame.maxY - panel.frame.height
+        let panelWidth = panel.frame.width
+        let panelHeight = panel.frame.height
+
+        // Center horizontally and anchor flush to the top bezel at the physical camera notch
+        let x = screenFrame.midX - (panelWidth / 2.0)
+        let y = screenFrame.maxY - panelHeight
+
         panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    private func hide() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        hideWorkItem?.cancel()
+        hideWorkItem = nil
+        panel?.orderOut(nil)
     }
 }

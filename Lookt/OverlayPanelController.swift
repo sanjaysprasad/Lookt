@@ -2,17 +2,8 @@ import SwiftUI
 import AppKit
 import Combine
 
-/// Shows a small floating Face ID-style scan animation once the screen is
-/// interactive again after waking/unlocking begins.
-///
-/// IMPORTANT: this cannot and does not draw over the actual macOS lock
-/// screen — Apple reserves that surface for system UI only, the same
-/// restriction that suspends camera access while truly locked (see
-/// FaceAuthController's comments). What this DOES do: as soon as the
-/// screen wakes and hands control back to regular apps, if a scan is in
-/// progress or just completed, a small borderless panel appears near the
-/// top of the screen showing the animation — a visible confirmation that
-/// runs alongside the real password/Touch ID prompt, not instead of it.
+/// Displays a sleek floating Face ID capsule right beneath the top menu bar / notch,
+/// mimicking the iPhone Dynamic Island Face ID unlock prompt.
 final class OverlayPanelController {
     private var panel: NSPanel?
     private var hostingController: NSHostingController<FaceIDScanView>?
@@ -27,7 +18,7 @@ final class OverlayPanelController {
 
         NotificationCenter.default.publisher(for: .looktMatched)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.show(state: .success, autoHideAfter: 1.5) }
+            .sink { [weak self] _ in self?.show(state: .success, autoHideAfter: 1.2) }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktScanEnded)
@@ -41,7 +32,7 @@ final class OverlayPanelController {
         hideWorkItem?.cancel()
 
         if panel == nil {
-            let scanView = FaceIDScanView(state: state)
+            let scanView = FaceIDScanView(state: state, size: 96)
             let hosting = NSHostingController(rootView: scanView)
             hostingController = hosting
 
@@ -52,12 +43,13 @@ final class OverlayPanelController {
             p.isFloatingPanel = true
             p.level = .floating
             p.backgroundColor = .clear
-            p.hasShadow = true
+            p.isOpaque = false
+            p.hasShadow = false // FaceIDScanView handles its own glowing shadow
             p.setContentSize(NSSize(width: 130, height: 130))
             p.isMovableByWindowBackground = false
             panel = p
         } else {
-            hostingController?.rootView = FaceIDScanView(state: state)
+            hostingController?.rootView = FaceIDScanView(state: state, size: 96)
         }
 
         positionNearTopCenter()
@@ -80,7 +72,7 @@ final class OverlayPanelController {
         guard let panel = panel, let screen = NSScreen.main else { return }
         let screenFrame = screen.visibleFrame
         let x = screenFrame.midX - panel.frame.width / 2
-        let y = screenFrame.maxY - panel.frame.height - 80
+        let y = screenFrame.maxY - panel.frame.height - 40
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

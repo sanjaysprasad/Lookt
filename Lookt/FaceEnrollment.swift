@@ -3,30 +3,30 @@ import CoreImage
 import AVFoundation
 
 enum EnrollmentStep: Int, CaseIterable {
-    case lookStraight, turnLeft, turnRight, dimLight
+    case lookStraight, turnLeft, turnRight
 
     var instruction: String {
         switch self {
         case .lookStraight: return "Look straight at the camera"
         case .turnLeft: return "Slowly turn your head slightly left"
         case .turnRight: return "Slowly turn your head slightly right"
-        case .dimLight: return "Optional: dim room lighting for night profile"
         }
     }
 
-    var framesToCapture: Int { 3 } // 2-3 captures per condition
+    var framesToCapture: Int { 3 }
 }
 
-/// Runs the one-time enrollment sequence: for each condition (straight,
-/// left, right, optionally dim light), capture several frames, extract
-/// embeddings, and average them into one reference vector per condition.
-/// The whole set (not just one vector) is stored so matching can compare
-/// against multiple reference points.
+/// Runs enrollment for a specific profile (e.g. Primary, Glasses, Low Light):
+/// Captures multiple frames across angles, computes averaged reference vectors,
+/// and saves the resulting FaceProfile into KeychainStore.
 final class FaceEnrollmentController: ObservableObject {
     @Published var currentStep: EnrollmentStep = .lookStraight
     @Published var framesCapturedInStep = 0
     @Published var isComplete = false
     @Published var statusMessage = "Ready to enroll"
+
+    var targetProfileName: String = "Primary Face"
+    var targetProfileStyle: ProfileStyle = .defaultFace
 
     private let camera = CameraManager()
     private let embedder = VisionFaceEmbedder()
@@ -36,23 +36,37 @@ final class FaceEnrollmentController: ObservableObject {
 
     private var isCapturingAllowed = false
     private var lastCaptureTime: Date?
-    private let minIntervalBetweenCaptures: TimeInterval = 0.5
-    private let getReadyDelay: TimeInterval = 1.5
+    private let minIntervalBetweenCaptures: TimeInterval = 0.45
+    private let getReadyDelay: TimeInterval = 1.2
     private var readyWorkItem: DispatchWorkItem?
 
-    /// Exposed so the enrollment UI can show a live preview.
     var previewSession: AVCaptureSession { camera.captureSession }
 
     init() {
-        if KeychainStore.hasEnrollment() {
+        if KeychainStore.hasProfiles() {
+            let count = KeychainStore.loadProfiles().count
             isComplete = true
-            let count = KeychainStore.loadEmbeddings().count
-            statusMessage = "Enrolled (\(count) reference profiles saved)."
+            statusMessage = "\(count) face profile\(count == 1 ? "" : "s") registered."
         }
     }
 
-    /// Resets everything so enrollment can be run again from scratch —
-    /// used by the "Re-enroll" button.
+    func startEnrollment(name: String, style: ProfileStyle) {
+        self.targetProfileName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? style.rawValue : name
+        self.targetProfileStyle = style
+        reset()
+
+        statusMessage = "Requesting camera access…"
+        camera.requestAccessAndStart { [weak self] granted in
+            guard let self = self else { return }
+            guard granted else {
+                self.statusMessage = "Camera access denied — enable it in System Settings > Privacy & Security > Camera."
+                return
+            }
+            self.subscribeToFrames()
+            self.beginCaptureForCurrentStep()
+        }
+    }
+
     func reset() {
         cancellable?.cancel()
         cancellable = nil
@@ -67,25 +81,6 @@ final class FaceEnrollmentController: ObservableObject {
         allEnrolledEmbeddings.removeAll()
         isCapturingAllowed = false
         lastCaptureTime = nil
-    }
-
-    func start() {
-        statusMessage = "Requesting camera access…"
-        camera.requestAccessAndStart { [weak self] granted in
-            guard let self = self else { return }
-            guard granted else {
-                self.statusMessage = "Camera access denied — enable it in System Settings > Privacy."
-                return
-            }
-            self.subscribeToFrames()
-            self.beginCaptureForCurrentStep()
-        }
-    }
-
-    /// Skips the current step if it is optional (dim light).
-    func skipCurrentStep() {
-        guard currentStep == .dimLight else { return }
-        finishEnrollment()
     }
 
     private func beginCaptureForCurrentStep() {
@@ -117,7 +112,7 @@ final class FaceEnrollmentController: ObservableObject {
 
         let now = Date()
         if let last = lastCaptureTime, now.timeIntervalSince(last) < minIntervalBetweenCaptures {
-            return // too soon after the last capture — skip this frame
+            return
         }
         lastCaptureTime = now
 
@@ -151,10 +146,22 @@ final class FaceEnrollmentController: ObservableObject {
         cancellable = nil
         readyWorkItem?.cancel()
         readyWorkItem = nil
-        let saved = KeychainStore.saveEmbeddings(allEnrolledEmbeddings)
-        statusMessage = saved ? "Enrollment complete — \(allEnrolledEmbeddings.count) reference profiles saved."
-                               : "Failed to save enrollment. Try again."
-        isComplete = saved
+
+        let newProfile = FaceProfile(
+            name: targetProfileName,
+            style: targetProfileStyle,
+            dateEnrolled: Date(),
+            embeddings: allEnrolledEmbeddings
+        )
+
+        let saved = KeychainStore.addProfile(newProfile)
+        if saved {
+            statusMessage = "Profile '\(newProfile.name)' saved successfully!"
+            isComplete = true
+        } else {
+            statusMessage = "Failed to save profile to Keychain. Please try again."
+            isComplete = false
+        }
     }
 
     private func average(_ embeddings: [FaceEmbedding]) -> FaceEmbedding {

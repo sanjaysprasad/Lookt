@@ -3,16 +3,11 @@ import CoreImage
 import Vision
 import Foundation
 
-/// Coordinates a single Face ID attempt while the screen is locked:
-/// max brightness → watch camera → require liveness AND embedding match
-/// across several frames → on success, surface the unlock affordance.
-///
-/// Deliberately does NOT auto-type the login password (see the note in
-/// KeychainStore.saveLoginPasswordReference()). What it does instead:
-/// once matched + live, it wakes the display and focuses the password
-/// field, so Touch ID / password entry remain the actual unlock
-/// mechanism — this reduces "face recognition bug = account takeover"
-/// risk while still saving the user the walk-up-and-notice step.
+/// Coordinates a Face ID unlock attempt when the screen is locked:
+/// 1. Checks if Lookt is enabled by user
+/// 2. Engages camera and evaluates liveness (blink + natural micro-motion)
+/// 3. Compares incoming embeddings against all enrolled face profiles
+/// 4. Once verified across consecutive frames, invokes MacUnlocker (Auto-Unlock or Wake Only)
 final class FaceAuthController {
     private let camera = CameraManager()
     private let embedder = VisionFaceEmbedder()
@@ -22,16 +17,26 @@ final class FaceAuthController {
     private var cancellable: AnyCancellable?
     private var consecutiveMatches = 0
     private let requiredConsecutiveMatches = 3
-    private let matchThreshold: Float = 0.88    // cosine similarity cutoff — tune during testing
+    private let matchThreshold: Float = 0.88
     private var timeoutWorkItem: DispatchWorkItem?
 
     func beginAuthAttempt() {
-        guard KeychainStore.hasEnrollment() else { return } // nothing enrolled, nothing to do
-        guard cancellable == nil else { return } // attempt already in progress
+        // Master toggle check
+        let isEnabled = UserDefaults.standard.object(forKey: "isLooktEnabled") as? Bool ?? true
+        guard isEnabled else { return }
+
+        // Must have at least one enrolled profile
+        guard KeychainStore.hasProfiles() else { return }
+        guard cancellable == nil else { return } // already in progress
 
         consecutiveMatches = 0
         liveness.reset()
-        brightness.maxOutBrightness()
+
+        let boostBrightness = UserDefaults.standard.object(forKey: "boostBrightness") as? Bool ?? true
+        if boostBrightness {
+            brightness.maxOutBrightness()
+        }
+
         NotificationCenter.default.post(name: .looktScanStarted, object: nil)
 
         camera.requestAccessAndStart { [weak self] granted in
@@ -52,8 +57,8 @@ final class FaceAuthController {
     }
 
     private func subscribe() {
-        let reference = KeychainStore.loadEmbeddings()
-        guard !reference.isEmpty else { return }
+        let referenceEmbeddings = KeychainStore.allEmbeddings()
+        guard !referenceEmbeddings.isEmpty else { return }
 
         cancellable = camera.framePublisher
             .receive(on: DispatchQueue.global(qos: .userInitiated))
@@ -61,14 +66,13 @@ final class FaceAuthController {
             .sink { [weak self] result in
                 self?.processFrame(embedding: result.embedding,
                                     landmarks: result.landmarks,
-                                    reference: reference)
+                                    reference: referenceEmbeddings)
             }
     }
 
     private func processFrame(embedding: FaceEmbedding, landmarks: VNFaceLandmarks2D?, reference: [FaceEmbedding]) {
         guard !embedding.isEmpty else { consecutiveMatches = 0; return }
 
-        // Liveness must pass on this stream before a match even counts.
         var isLive = false
         if let landmarks = landmarks {
             isLive = liveness.ingest(landmarks)
@@ -94,7 +98,7 @@ final class FaceAuthController {
 
     private func armTimeout() {
         let workItem = DispatchWorkItem { [weak self] in
-            self?.cancelAuthAttempt() // give up gracefully, user falls back to Touch ID/password
+            self?.cancelAuthAttempt()
         }
         timeoutWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: workItem)
@@ -102,13 +106,19 @@ final class FaceAuthController {
 
     private func onAuthSuccess() {
         cancelAuthAttempt()
-        // Wake display + focus password field via Accessibility APIs here.
         NotificationCenter.default.post(name: .looktMatched, object: nil)
+
+        // Read user's chosen unlock mode
+        let modeRaw = UserDefaults.standard.string(forKey: "unlockMode") ?? UnlockMode.autoUnlock.rawValue
+        let mode = UnlockMode(rawValue: modeRaw) ?? .autoUnlock
+
+        // Perform unlock via MacUnlocker
+        MacUnlocker.shared.performUnlock(mode: mode)
     }
 }
 
 extension Notification.Name {
     static let looktMatched = Notification.Name("LooktMatched")
     static let looktScanStarted = Notification.Name("LooktScanStarted")
-    static let looktScanEnded = Notification.Name("LooktScanEnded") // timeout/cancel without a match
+    static let looktScanEnded = Notification.Name("LooktScanEnded")
 }

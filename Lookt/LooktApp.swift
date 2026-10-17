@@ -6,8 +6,6 @@ struct LooktApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        // Placeholder scene — SwiftUI's App protocol requires at least one.
-        // The actual window is managed manually by AppDelegate below.
         Settings {
             EmptyView()
         }
@@ -21,17 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let overlay = OverlayPanelController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Regular app (has a Dock icon / Applications entry) rather than a
-        // menu-bar-only accessory. Clicking the app icon opens the window;
-        // the rest of the time it runs quietly watching for lock/unlock in
-        // the background.
         NSApp.setActivationPolicy(.regular)
         showMainWindow()
         overlay.start()
 
-        // Wire the lock-screen watcher to trigger auth attempts. This runs
-        // regardless of whether the window is open — it's the persistent
-        // background behavior — and fires every time the screen locks.
         lockWatcher.onScreenLocked = { [weak self] in
             self?.authController.beginAuthAttempt()
         }
@@ -41,9 +32,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lockWatcher.start()
     }
 
-    /// Called when the app is already running and the user clicks its icon
-    /// again in the Dock/Applications/Launchpad — re-shows the window
-    /// instead of doing nothing.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showMainWindow()
         return true
@@ -55,10 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if mainWindow == nil {
             let hosting = NSHostingController(rootView: EnrollmentView())
             let window = NSWindow(contentViewController: hosting)
-            window.title = "Lookt"
+            window.title = "Lookt — Face ID for Mac"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            window.setContentSize(NSSize(width: 420, height: 560))
-            window.minSize = NSSize(width: 400, height: 460)
+            window.setContentSize(NSSize(width: 560, height: 680))
+            window.minSize = NSSize(width: 500, height: 550)
             window.center()
             window.isReleasedWhenClosed = false
             mainWindow = window

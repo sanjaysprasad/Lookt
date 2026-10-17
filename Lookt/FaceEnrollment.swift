@@ -101,14 +101,14 @@ final class FaceEnrollmentController: ObservableObject {
         cancellable = camera.framePublisher
             .receive(on: DispatchQueue.global(qos: .userInitiated))
             .compactMap { [weak self] frame in self?.embedder.embed(frame) }
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] result in
-                self?.handle(embedding: result.embedding)
+                self?.handleCapturedFrame(result.embedding)
             }
     }
 
-    private func handle(embedding: FaceEmbedding) {
-        guard isCapturingAllowed, !embedding.isEmpty, framesCapturedInStep < currentStep.framesToCapture else { return }
+    private func handleCapturedFrame(_ embedding: FaceEmbedding) {
+        guard isCapturingAllowed else { return }
+        guard !embedding.isEmpty else { return }
 
         let now = Date()
         if let last = lastCaptureTime, now.timeIntervalSince(last) < minIntervalBetweenCaptures {
@@ -116,36 +116,35 @@ final class FaceEnrollmentController: ObservableObject {
         }
         lastCaptureTime = now
 
-        capturedThisStep.append(embedding)
-        framesCapturedInStep += 1
-        statusMessage = "\(currentStep.instruction) (\(framesCapturedInStep)/\(currentStep.framesToCapture))"
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.capturedThisStep.append(embedding)
+            self.framesCapturedInStep += 1
 
-        if framesCapturedInStep >= currentStep.framesToCapture {
-            allEnrolledEmbeddings.append(average(capturedThisStep))
-            advanceStep()
+            if self.framesCapturedInStep >= self.currentStep.framesToCapture {
+                self.allEnrolledEmbeddings.append(self.average(self.capturedThisStep))
+                self.capturedThisStep.removeAll()
+                self.framesCapturedInStep = 0
+                self.advanceOrFinish()
+            }
         }
     }
 
-    private func advanceStep() {
-        capturedThisStep.removeAll()
-        framesCapturedInStep = 0
-
+    private func advanceOrFinish() {
         let allSteps = EnrollmentStep.allCases
-        guard let currentIndex = allSteps.firstIndex(of: currentStep),
-              currentIndex + 1 < allSteps.count else {
+        let nextIndex = currentStep.rawValue + 1
+        if nextIndex < allSteps.count {
+            currentStep = allSteps[nextIndex]
+            beginCaptureForCurrentStep()
+        } else {
             finishEnrollment()
-            return
         }
-        currentStep = allSteps[currentIndex + 1]
-        beginCaptureForCurrentStep()
     }
 
     private func finishEnrollment() {
         camera.stop()
         cancellable?.cancel()
         cancellable = nil
-        readyWorkItem?.cancel()
-        readyWorkItem = nil
 
         let newProfile = FaceProfile(
             name: targetProfileName,
@@ -156,7 +155,7 @@ final class FaceEnrollmentController: ObservableObject {
 
         let saved = KeychainStore.addProfile(newProfile)
         if saved {
-            statusMessage = "Profile '\(newProfile.name)' saved successfully!"
+            statusMessage = "Profile '\(newProfile.name)' saved with Neural Face ID!"
             isComplete = true
         } else {
             statusMessage = "Failed to save profile to Keychain. Please try again."
@@ -170,6 +169,8 @@ final class FaceEnrollmentController: ObservableObject {
         for e in embeddings {
             for i in 0..<length { sum[i] += e[i] }
         }
-        return sum.map { $0 / Float(embeddings.count) }
+        let avg = sum.map { $0 / Float(embeddings.count) }
+        let norm = sqrt(avg.reduce(0) { $0 + $1 * $1 })
+        return norm > 0 ? avg.map { $0 / norm } : avg
     }
 }

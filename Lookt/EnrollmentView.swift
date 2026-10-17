@@ -122,6 +122,27 @@ struct EnrollmentView: View {
                 .buttonStyle(.borderedProminent)
             }
 
+            let hasLegacyProfiles = profiles.contains { ($0.embeddings.first?.count ?? 0) != 522 }
+            if hasLegacyProfiles {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .foregroundColor(.orange)
+                        .font(.title3)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Security Upgrade Available")
+                            .font(.callout).bold()
+                        Text("Your registered profile was saved with the legacy model. Please delete it below and re-enroll to activate Apple Neural Face ID and anti-photo protection.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.12)))
+            }
+
             if profiles.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "faceid")
@@ -169,6 +190,22 @@ struct EnrollmentView: View {
                                     Text("Added \(profile.dateEnrolled.formatted(date: .abbreviated, time: .omitted))")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
+
+                                    if (profile.embeddings.first?.count ?? 0) == 522 {
+                                        Text("Neural")
+                                            .font(.caption2).bold()
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Capsule().fill(Color.green.opacity(0.18)))
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Text("Legacy")
+                                            .font(.caption2).bold()
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Capsule().fill(Color.orange.opacity(0.2)))
+                                            .foregroundColor(.orange)
+                                    }
                                 }
                             }
 

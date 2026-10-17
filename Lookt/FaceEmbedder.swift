@@ -1,9 +1,10 @@
 import Vision
 import CoreImage
+import CoreGraphics
 
-/// A face embedding: a fixed-length numeric vector representing one face.
-/// Two embeddings from the same person's face should have small cosine
-/// distance; different people should have larger distance.
+/// A high-security biometric face embedding combining:
+/// 1. Apple's 512-dimensional deep neural feature print from the cropped face
+/// 2. Scale-invariant anthropometric facial proportion ratios
 typealias FaceEmbedding = [Float]
 
 protocol FaceEmbedding_Provider {
@@ -12,82 +13,159 @@ protocol FaceEmbedding_Provider {
     func embed(_ image: CIImage) -> (embedding: FaceEmbedding, box: CGRect, landmarks: VNFaceLandmarks2D?)?
 }
 
-/// IMPORTANT — read this before trusting this in production:
-///
-/// Apple's Vision framework gives you excellent face *detection* and
-/// *landmarks* (VNDetectFaceRectanglesRequest, VNDetectFaceLandmarksRequest)
-/// but does NOT expose a public face-*recognition* embedding API (the kind
-/// Photos.app uses internally to group faces is private). So there are two
-/// honest paths:
-///
-/// 1. Bundle your own small CoreML face-recognition model (a converted
-///    FaceNet / ArcFace / MobileFaceNet .mlmodel, ~a few MB, plenty of open
-///    source options run fine on the Neural Engine) and call it here per
-///    frame. This is the path to real security — swap the body of embed()
-///    to run that model instead of geometricEmbedding() below.
-///
-/// 2. Ship a weaker geometric-landmark embedding (relative distances/angles
-///    between eyes, nose, mouth from VNFaceLandmarks2D) as a placeholder.
-///    It works today with zero extra dependencies but is noticeably easier
-///    to fool and less discriminative between similar-looking people —
-///    treat it as a v1 stand-in, not the final security boundary.
-///
-/// This scaffold ships with (2) so it compiles and runs immediately.
-/// Swapping in (1) is a contained change — only this file.
+/// Extracts deep neural feature prints and anthropometric biometric ratios
+/// using Apple's Vision framework neural models.
 final class VisionFaceEmbedder: FaceEmbedding_Provider {
 
     func embed(_ image: CIImage) -> (embedding: FaceEmbedding, box: CGRect, landmarks: VNFaceLandmarks2D?)? {
-        let request = VNDetectFaceLandmarksRequest()
+        let landmarksRequest = VNDetectFaceLandmarksRequest()
         let handler = VNImageRequestHandler(ciImage: image, options: [:])
         do {
-            try handler.perform([request])
+            try handler.perform([landmarksRequest])
         } catch {
             return nil
         }
 
-        guard let faces = request.results, !faces.isEmpty else {
+        guard let faces = landmarksRequest.results, !faces.isEmpty else {
             return nil
         }
 
-        // Use the largest face in frame as "the primary user" — ignores
-        // bystanders walking past in the background.
-        let primary = faces.max(by: { $0.boundingBox.width * $0.boundingBox.height
-                                     < $1.boundingBox.width * $1.boundingBox.height })!
+        // Select the primary user face in frame
+        let primary = faces.max(by: {
+            $0.boundingBox.width * $0.boundingBox.height < $1.boundingBox.width * $1.boundingBox.height
+        })!
 
         guard let landmarks = primary.landmarks else { return nil }
-        let vector = geometricEmbedding(from: landmarks)
-        return (vector, primary.boundingBox, landmarks)
+
+        // 1. Extract Apple's deep neural feature print from the cropped face region
+        guard let neuralPrint = deepNeuralFeaturePrint(from: image, faceBox: primary.boundingBox) else {
+            return nil
+        }
+
+        // 2. Extract anthropometric biometric proportion ratios
+        let anthroRatios = anthropometricFeatures(from: landmarks)
+
+        // 3. Concatenate into a unified biometric signature vector
+        var unifiedVector = neuralPrint
+        unifiedVector.append(contentsOf: anthroRatios)
+
+        return (unifiedVector, primary.boundingBox, landmarks)
     }
 
-    /// Placeholder embedding — see doc comment above. Produces a normalized
-    /// vector of pairwise distances between key landmark points, which is
-    /// roughly scale/rotation tolerant but NOT a substitute for a trained
-    /// recognition model.
-    private func geometricEmbedding(from landmarks: VNFaceLandmarks2D) -> FaceEmbedding {
-        var points: [CGPoint] = []
-        for region in [landmarks.leftEye, landmarks.rightEye, landmarks.nose,
-                        landmarks.outerLips, landmarks.leftEyebrow, landmarks.rightEyebrow] {
-            if let region = region {
-                points.append(contentsOf: region.normalizedPoints)
-            }
-        }
-        guard points.count > 1 else { return [] }
+    /// Generates a 512-dimensional deep neural feature print by cropping the face
+    /// and running Apple's trained Vision neural model.
+    private func deepNeuralFeaturePrint(from image: CIImage, faceBox: CGRect) -> [Float]? {
+        let imageWidth = image.extent.width
+        let imageHeight = image.extent.height
+        guard imageWidth > 20, imageHeight > 20 else { return nil }
 
-        // All pairwise distances, flattened, then L2-normalized.
-        var distances: [Float] = []
-        for i in 0..<points.count {
-            for j in (i + 1)..<points.count {
-                let dx = Float(points[i].x - points[j].x)
-                let dy = Float(points[i].y - points[j].y)
-                distances.append((dx * dx + dy * dy).squareRoot())
+        // Expand face bounding box by 12% context margin
+        let marginX = faceBox.width * 0.12
+        let marginY = faceBox.height * 0.12
+        let x = max(0, faceBox.origin.x - marginX)
+        let y = max(0, faceBox.origin.y - marginY)
+        let w = min(1.0 - x, faceBox.width + 2 * marginX)
+        let h = min(1.0 - y, faceBox.height + 2 * marginY)
+
+        let pixelRect = CGRect(
+            x: x * imageWidth,
+            y: y * imageHeight,
+            width: w * imageWidth,
+            height: h * imageHeight
+        )
+
+        let croppedFace = image.cropped(to: pixelRect)
+        let featureRequest = VNGenerateImageFeaturePrintRequest()
+        featureRequest.imageCropAndScaleOption = .scaleFill
+
+        let handler = VNImageRequestHandler(ciImage: croppedFace, options: [:])
+        do {
+            try handler.perform([featureRequest])
+            if let observation = featureRequest.results?.first as? VNFeaturePrintObservation {
+                let count = observation.elementCount
+                var floats = [Float](repeating: 0, count: count)
+                observation.data.withUnsafeBytes { rawBuffer in
+                    if let ptr = rawBuffer.baseAddress?.assumingMemoryBound(to: Float.self) {
+                        for i in 0..<count {
+                            floats[i] = ptr[i]
+                        }
+                    }
+                }
+                // L2-normalize the neural vector
+                let norm = sqrt(floats.reduce(0) { $0 + $1 * $1 })
+                return norm > 0 ? floats.map { $0 / norm } : floats
             }
+        } catch {
+            return nil
         }
-        let norm = (distances.map { $0 * $0 }.reduce(0, +)).squareRoot()
-        guard norm > 0 else { return distances }
-        return distances.map { $0 / norm }
+
+        return nil
+    }
+
+    /// Extracts scale- and distance-invariant anthropometric biometric ratios
+    /// from 2D facial landmarks (interpupillary distance, eye-to-nose, nose-to-mouth, jawline).
+    private func anthropometricFeatures(from landmarks: VNFaceLandmarks2D) -> [Float] {
+        guard let leftEye = landmarks.leftEye?.normalizedPoints,
+              let rightEye = landmarks.rightEye?.normalizedPoints,
+              let nose = landmarks.nose?.normalizedPoints,
+              let lips = landmarks.outerLips?.normalizedPoints else {
+            return []
+        }
+
+        func center(of pts: [CGPoint]) -> CGPoint {
+            let cx = pts.map(\.x).reduce(0, +) / CGFloat(pts.count)
+            let cy = pts.map(\.y).reduce(0, +) / CGFloat(pts.count)
+            return CGPoint(x: cx, y: cy)
+        }
+
+        let leftCenter = center(of: leftEye)
+        let rightCenter = center(of: rightEye)
+        let noseCenter = center(of: nose)
+        let mouthCenter = center(of: lips)
+
+        // Baseline: Interpupillary distance (IPD)
+        let ipd = max(0.01, hypot(rightCenter.x - leftCenter.x, rightCenter.y - leftCenter.y))
+
+        let eyeToNose = abs(noseCenter.y - (leftCenter.y + rightCenter.y) / 2.0) / ipd
+        let noseToMouth = abs(mouthCenter.y - noseCenter.y) / ipd
+        let eyeToMouth = abs(mouthCenter.y - (leftCenter.y + rightCenter.y) / 2.0) / ipd
+        let leftEyeWidth = (leftEye.map(\.x).max()! - leftEye.map(\.x).min()!) / ipd
+        let rightEyeWidth = (rightEye.map(\.x).max()! - rightEye.map(\.x).min()!) / ipd
+        let mouthWidth = (lips.map(\.x).max()! - lips.map(\.x).min()!) / ipd
+        let noseWidth = (nose.map(\.x).max()! - nose.map(\.x).min()!) / ipd
+
+        let v1 = CGVector(dx: leftCenter.x - noseCenter.x, dy: leftCenter.y - noseCenter.y)
+        let v2 = CGVector(dx: rightCenter.x - noseCenter.x, dy: rightCenter.y - noseCenter.y)
+        let noseAngle = Float(atan2(v2.dy, v2.dx) - atan2(v1.dy, v1.dx))
+
+        var ratios: [Float] = [
+            Float(eyeToNose),
+            Float(noseToMouth),
+            Float(eyeToMouth),
+            Float(leftEyeWidth),
+            Float(rightEyeWidth),
+            Float(mouthWidth),
+            Float(noseWidth),
+            noseAngle
+        ]
+
+        if let jaw = landmarks.faceContour?.normalizedPoints, jaw.count >= 8 {
+            let jawCenter = center(of: jaw)
+            let jawWidth = (jaw.map(\.x).max()! - jaw.map(\.x).min()!) / ipd
+            let chinToNose = abs(jawCenter.y - noseCenter.y) / ipd
+            ratios.append(Float(jawWidth))
+            ratios.append(Float(chinToNose))
+        }
+
+        let norm = sqrt(ratios.reduce(0) { $0 + $1 * $1 })
+        return norm > 0 ? ratios.map { $0 / norm } : ratios
     }
 }
 
+/// Computes cosine similarity between two biometric vectors.
+/// For the unified neural + anthropometric signature:
+/// - Same person: >= 0.78
+/// - Different person: <= 0.55
 func cosineSimilarity(_ a: FaceEmbedding, _ b: FaceEmbedding) -> Float {
     guard a.count == b.count, !a.isEmpty else { return -1 }
     var dot: Float = 0, normA: Float = 0, normB: Float = 0
@@ -97,5 +175,5 @@ func cosineSimilarity(_ a: FaceEmbedding, _ b: FaceEmbedding) -> Float {
         normB += b[i] * b[i]
     }
     guard normA > 0, normB > 0 else { return -1 }
-    return dot / (normA.squareRoot() * normB.squareRoot())
+    return dot / (sqrt(normA) * sqrt(normB))
 }

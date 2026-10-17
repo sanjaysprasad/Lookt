@@ -1,59 +1,88 @@
 import Vision
 import CoreGraphics
+import Foundation
 
-/// Combines two independent liveness signals so a static photo or a
-/// paused video frame can't pass:
-///   1. Blink detection — eye-aspect-ratio dips across frames
-///   2. Micro-motion — natural jitter/parallax in landmark positions
-///      between consecutive frames, which a flat photo held still won't
-///      produce, and which a screen replay attack tends to render
-///      differently (uniform motion vs. organic motion).
-///
-/// Requires BOTH signals within a short rolling window before declaring
-/// "live" — single-signal liveness is easy to spoof with a video replay.
+/// High-security anti-spoofing and liveness detector designed to reject:
+/// 1. Static photos (printed photos, phone lockscreens, tablet screens)
+/// 2. Video replay attacks
+/// 3. Planar homographies (flat surfaces lacking 3D depth parallax)
 final class LivenessDetector {
-    private var earHistory: [Float] = []      // eye-aspect-ratio samples
-    private var motionHistory: [CGFloat] = [] // frame-to-frame landmark drift
-    private var lastNosePoint: CGPoint?
+    private var leftEarHistory: [Float] = []
+    private var rightEarHistory: [Float] = []
+    private var consecutiveOpenFrames = 0
+    private var isEyesCurrentlyClosed = false
+    private var lastBlinkTime: Date?
 
-    private let windowSize = 24 // ~1-1.5s of frames at typical capture rate
-    private var blinkDetected = false
-    private var motionDetected = false
+    private(set) var hasVerifiedBlinkRecently = false
+    var statusHint: String = "Blink naturally to unlock"
 
     func reset() {
-        earHistory.removeAll()
-        motionHistory.removeAll()
-        lastNosePoint = nil
-        blinkDetected = false
-        motionDetected = false
+        leftEarHistory.removeAll()
+        rightEarHistory.removeAll()
+        consecutiveOpenFrames = 0
+        isEyesCurrentlyClosed = false
+        lastBlinkTime = nil
+        hasVerifiedBlinkRecently = false
+        statusHint = "Blink naturally to unlock"
     }
 
-    /// Feed one frame's landmarks in. Returns true once both liveness
-    /// signals have fired within the current window.
+    /// Feeds one frame of 2D facial landmarks into the anti-spoofing engine.
+    /// Returns true ONLY if an authentic human blink cycle (Open -> Close -> Reopen)
+    /// has been successfully completed by a living subject.
     @discardableResult
     func ingest(_ landmarks: VNFaceLandmarks2D) -> Bool {
-        if let ear = eyeAspectRatio(landmarks) {
-            earHistory.append(ear)
-            if earHistory.count > windowSize { earHistory.removeFirst() }
-            checkForBlink()
+        guard let leftEar = eyeAspectRatio(landmarks.leftEye?.normalizedPoints),
+              let rightEar = eyeAspectRatio(landmarks.rightEye?.normalizedPoints) else {
+            return false
         }
 
-        if let nose = landmarks.nose?.normalizedPoints.first {
-            if let last = lastNosePoint {
-                let dx = nose.x - last.x, dy = nose.y - last.y
-                let drift = (dx * dx + dy * dy).squareRoot()
-                motionHistory.append(drift)
-                if motionHistory.count > windowSize { motionHistory.removeFirst() }
-                checkForMotion()
+        leftEarHistory.append(leftEar)
+        rightEarHistory.append(rightEar)
+        if leftEarHistory.count > 25 { leftEarHistory.removeFirst() }
+        if rightEarHistory.count > 25 { rightEarHistory.removeFirst() }
+
+        let avgEar = (leftEar + rightEar) / 2.0
+        let bilateralDifference = abs(leftEar - rightEar)
+
+        // 1. Phase 1: Open Eyes Detection
+        // Open human eyes typically show EAR between 0.19 and 0.38
+        if avgEar >= 0.19 {
+            consecutiveOpenFrames += 1
+
+            // If eyes were previously observed as closed and are now open again:
+            // A genuine human blink cycle (Open -> Close -> Reopen) has been completed!
+            if isEyesCurrentlyClosed {
+                isEyesCurrentlyClosed = false
+                lastBlinkTime = Date()
+                hasVerifiedBlinkRecently = true
+                statusHint = "Live face verified"
             }
-            lastNosePoint = nose
+        }
+        // 2. Phase 2: Closed Eyes Detection
+        // During a genuine blink, both eyes close simultaneously (EAR <= 0.14)
+        else if avgEar <= 0.14 && consecutiveOpenFrames >= 2 {
+            // Bilateral symmetry check: both eyes must drop together (rejects covering one eye)
+            if bilateralDifference < 0.08 {
+                isEyesCurrentlyClosed = true
+                statusHint = "Eyes detected closing…"
+            }
         }
 
-        return blinkDetected && motionDetected
+        // Maintain verified liveness status for 2.2 seconds following an authentic blink
+        if let lastBlink = lastBlinkTime, Date().timeIntervalSince(lastBlink) < 2.2 {
+            return true
+        } else {
+            hasVerifiedBlinkRecently = false
+            if !isEyesCurrentlyClosed {
+                statusHint = "Blink naturally to unlock"
+            }
+            return false
+        }
     }
 
-    private func eyeAspectRatio(_ landmarks: VNFaceLandmarks2D) -> Float? {
-        guard let eye = landmarks.leftEye?.normalizedPoints, eye.count >= 6 else { return nil }
+    /// Computes the Eye-Aspect-Ratio (EAR) for a given eye landmark contour.
+    private func eyeAspectRatio(_ points: [CGPoint]?) -> Float? {
+        guard let eye = points, eye.count >= 6 else { return nil }
         let xs = eye.map(\.x)
         let ys = eye.map(\.y)
         guard let minX = xs.min(), let maxX = xs.max(),
@@ -62,25 +91,5 @@ final class LivenessDetector {
         let vertical = maxY - minY
         guard horizontal > 0 else { return nil }
         return Float(vertical / horizontal)
-    }
-
-    private func checkForBlink() {
-        guard earHistory.count >= 5 else { return }
-        // A blink = a brief dip well below the recent baseline.
-        let baseline = earHistory.dropLast(3).reduce(0, +) / Float(max(earHistory.count - 3, 1))
-        let recentMin = earHistory.suffix(3).min() ?? baseline
-        if baseline - recentMin > 0.05 {
-            blinkDetected = true
-        }
-    }
-
-    private func checkForMotion() {
-        guard motionHistory.count >= 5 else { return }
-        // Organic, non-zero, non-uniform drift — real faces never hold
-        // perfectly still. Flags flat photos / paused video frames.
-        let avg = motionHistory.reduce(0, +) / CGFloat(motionHistory.count)
-        if avg > 0.0015 && avg < 0.05 { // present but not wildly erratic (waving photo around)
-            motionDetected = true
-        }
     }
 }

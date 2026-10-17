@@ -149,7 +149,7 @@ struct DynamicIslandView: View {
         if !subtitle.isEmpty { return subtitle }
         switch state {
         case .idle: return "Ready"
-        case .scanning: return "Verifying appearance…"
+        case .scanning: return "Blink naturally to unlock"
         case .success: return "Welcome back"
         case .failed: return "Use Touch ID or Password"
         }

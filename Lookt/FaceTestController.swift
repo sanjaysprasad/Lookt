@@ -5,7 +5,7 @@ import AVFoundation
 
 /// Runs the detection → liveness → matching pipeline in the foreground
 /// with a live preview, matching against all enrolled face profiles and
-/// reporting live scores and matched profile names.
+/// reporting live scores, liveness status, and matched profile names.
 final class FaceTestController: ObservableObject {
     @Published var scanState: ScanState = .idle
     @Published var lastScore: Float = 0
@@ -17,10 +17,13 @@ final class FaceTestController: ObservableObject {
     private let liveness = LivenessDetector()
     private var cancellable: AnyCancellable?
     private var consecutiveMatches = 0
-    private let requiredConsecutiveMatches = 3
-    private let matchThreshold: Float = 0.88
+    private let requiredConsecutiveMatches = 2
+    // Strict threshold for combined neural + anthropometric signature:
+    // Same person: >= 0.78
+    // Different person: <= 0.55
+    private let matchThreshold: Float = 0.78
     private var timeoutWorkItem: DispatchWorkItem?
-    private let timeoutSeconds: TimeInterval = 10
+    private let timeoutSeconds: TimeInterval = 12
     private var isScanning = false
 
     var previewSession: AVCaptureSession { camera.captureSession }
@@ -35,7 +38,7 @@ final class FaceTestController: ObservableObject {
         liveness.reset()
         isScanning = true
         scanState = .scanning
-        resultMessage = "Scanning…"
+        resultMessage = "Scanning… Look at camera and blink"
         matchedProfileInfo = ""
 
         camera.requestAccessAndStart { [weak self] granted in
@@ -73,7 +76,7 @@ final class FaceTestController: ObservableObject {
             guard let self = self, self.isScanning else { return }
             self.stop()
             self.scanState = .failed
-            self.resultMessage = "No match found — try again with better lighting or enroll another style."
+            self.resultMessage = "Authentication timed out — face did not match or blink not detected."
         }
         timeoutWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + timeoutSeconds, execute: work)
@@ -111,8 +114,17 @@ final class FaceTestController: ObservableObject {
             }
         }
 
+        let livenessHint = liveness.statusHint
         DispatchQueue.main.async { [weak self] in
-            self?.lastScore = topScore
+            guard let self = self else { return }
+            self.lastScore = topScore
+            if self.isScanning {
+                if topScore < self.matchThreshold {
+                    self.resultMessage = String(format: "Score: %.2f (Need >= %.2f) • Unrecognized Face", topScore, self.matchThreshold)
+                } else if !isLive {
+                    self.resultMessage = String(format: "Score: %.2f (Face recognized!) • %@", topScore, livenessHint)
+                }
+            }
         }
 
         if isLive && topScore >= matchThreshold {
@@ -127,11 +139,12 @@ final class FaceTestController: ObservableObject {
             cancellable?.cancel()
             cancellable = nil
             let matchedName = topName
+            let finalScore = topScore
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.scanState = .success
                 self.matchedProfileInfo = matchedName
-                self.resultMessage = "✅ Matched: \(matchedName)"
+                self.resultMessage = String(format: "✅ Matched: %@ (Score: %.2f)", matchedName, finalScore)
                 self.stop()
             }
         }

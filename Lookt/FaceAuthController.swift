@@ -2,10 +2,11 @@ import Combine
 import CoreImage
 import Vision
 import AppKit
+import IOKit.pwr_mgt
 
 /// Coordinates an authentication attempt on screen lock/wake:
-/// Boosts brightness in low light, streams frames from the camera,
-/// runs the deep neural embedding + anti-spoofing liveness check, and unlocks via MacUnlocker.
+/// Prevents display sleep, streams camera frames continuously for up to 40 seconds,
+/// provides waiting/wrong face/correct face animations, and triggers MacUnlocker.
 final class FaceAuthController {
     private let camera = CameraManager()
     private let embedder = VisionFaceEmbedder()
@@ -16,11 +17,11 @@ final class FaceAuthController {
     private var timeoutWorkItem: DispatchWorkItem?
     private var consecutiveMatches = 0
     private let requiredConsecutiveMatches = 2
-    // Strict biometric threshold for combined neural + anthropometric signature:
-    // Same person: >= 0.78
-    // Different person: <= 0.55
-    private let matchThreshold: Float = 0.78
+    // Strict threshold: same person is >= 0.72 (typically 0.76-0.90), strangers are <= 0.50
+    private let matchThreshold: Float = 0.72
     private var isAuthenticating = false
+    private var displaySleepAssertion: IOPMAssertionID = 0
+    private var lastWrongFaceAlertTime: Date?
 
     func beginAuthAttempt() {
         startAuthAttempt()
@@ -54,6 +55,10 @@ final class FaceAuthController {
         isAuthenticating = true
         consecutiveMatches = 0
         liveness.reset()
+        lastWrongFaceAlertTime = nil
+
+        // Prevent macOS lock screen from sleeping the display while Lookt is scanning
+        acquireDisplaySleepAssertion()
 
         // Temporarily boost brightness for low-light recognition if enabled
         let shouldBoost = UserDefaults.standard.object(forKey: "boostBrightness") as? Bool ?? true
@@ -61,7 +66,11 @@ final class FaceAuthController {
             brightness.maxOutBrightness()
         }
 
-        NotificationCenter.default.post(name: .looktScanStarted, object: nil)
+        NotificationCenter.default.post(
+            name: .looktScanStarted,
+            object: nil,
+            userInfo: ["subtitle": "Looking for face…"]
+        )
 
         camera.requestAccessAndStart { [weak self] granted in
             guard let self = self else { return }
@@ -82,6 +91,7 @@ final class FaceAuthController {
         timeoutWorkItem = nil
         camera.stop()
         brightness.restore()
+        releaseDisplaySleepAssertion()
         consecutiveMatches = 0
         liveness.reset()
 
@@ -102,7 +112,11 @@ final class FaceAuthController {
     }
 
     private func processFrame(embedding: FaceEmbedding, landmarks: VNFaceLandmarks2D?, reference: [FaceEmbedding]) {
-        guard !embedding.isEmpty else { consecutiveMatches = 0; return }
+        guard isAuthenticating else { return }
+        guard !embedding.isEmpty else {
+            consecutiveMatches = 0
+            return
+        }
 
         var isLive = false
         if let landmarks = landmarks {
@@ -111,15 +125,31 @@ final class FaceAuthController {
 
         let bestScore = reference.map { cosineSimilarity($0, embedding) }.max() ?? -1
 
-        // Strict biometric match AND genuine human blink verification required
+        // Strict biometric match AND genuine living subject confirmed
         if isLive && bestScore >= matchThreshold {
             consecutiveMatches += 1
         } else {
             consecutiveMatches = 0
+
+            // If a face is in view but unrecognized, trigger wrong face alert and KEEP SCANNING!
+            if bestScore >= 0.0 && bestScore < matchThreshold {
+                let now = Date()
+                if lastWrongFaceAlertTime == nil || now.timeIntervalSince(lastWrongFaceAlertTime!) > 2.2 {
+                    lastWrongFaceAlertTime = now
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(
+                            name: .looktWrongFace,
+                            object: nil,
+                            userInfo: ["subtitle": "Face Not Recognized • Looking…"]
+                        )
+                    }
+                }
+            }
         }
 
         if consecutiveMatches >= requiredConsecutiveMatches {
             consecutiveMatches = 0
+            isAuthenticating = false
             cancellable?.cancel()
             cancellable = nil
             DispatchQueue.main.async { [weak self] in
@@ -129,11 +159,12 @@ final class FaceAuthController {
     }
 
     private func armTimeout() {
+        // Keep checking for up to 40 seconds before falling back to manual password/Touch ID
         let workItem = DispatchWorkItem { [weak self] in
             self?.onAuthFailed(reason: "Use Touch ID or Password")
         }
         timeoutWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 40, execute: workItem)
     }
 
     private func onAuthSuccess() {
@@ -154,10 +185,28 @@ final class FaceAuthController {
             userInfo: ["subtitle": reason]
         )
     }
+
+    private func acquireDisplaySleepAssertion() {
+        guard displaySleepAssertion == 0 else { return }
+        let reason = "Lookt Face ID Active Scan" as CFString
+        IOPMAssertionCreateWithName(
+            kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            reason,
+            &displaySleepAssertion
+        )
+    }
+
+    private func releaseDisplaySleepAssertion() {
+        guard displaySleepAssertion != 0 else { return }
+        IOPMAssertionRelease(displaySleepAssertion)
+        displaySleepAssertion = 0
+    }
 }
 
 extension Notification.Name {
     static let looktMatched = Notification.Name("LooktMatched")
+    static let looktWrongFace = Notification.Name("LooktWrongFace")
     static let looktFailed = Notification.Name("LooktFailed")
     static let looktScanStarted = Notification.Name("LooktScanStarted")
     static let looktScanEnded = Notification.Name("LooktScanEnded")

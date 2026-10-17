@@ -54,14 +54,14 @@ final class MacUnlocker {
                 return
             }
 
-            // Allow display and lockscreen 0.7s to wake and stabilize input focus
-            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            // Allow display and lockscreen 0.45s to wake and stabilize input focus
+            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.45) { [weak self] in
                 self?.typePassword(password)
             }
         }
     }
 
-    /// Wakes the display cleanly via caffeinate and subtle cursor jitter (no keyboard keys or shortcuts).
+    /// Wakes the display and dismisses the lockscreen screensaver to focus the password field.
     private func wakeDisplay() {
         var assertionID: IOPMAssertionID = 0
         let reason = "Lookt Face ID Match Wake" as CFString
@@ -72,20 +72,16 @@ final class MacUnlocker {
 
         let task = Process()
         task.launchPath = "/usr/bin/caffeinate"
-        task.arguments = ["-u", "-t", "3"]
+        task.arguments = ["-u", "-t", "5"]
         try? task.run()
 
-        // Subtle mouse jitter to wake the lock screen clock without any keyboard keystrokes
+        // Send Space key to immediately dismiss the lockscreen clock/screensaver and bring up the password field
         if let source = CGEventSource(stateID: .hidSystemState) {
-            let currentLoc = CGEvent(source: nil)?.location ?? CGPoint(x: 500, y: 500)
-            let move1 = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: CGPoint(x: currentLoc.x + 2, y: currentLoc.y), mouseButton: .left)
-            let move2 = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: currentLoc, mouseButton: .left)
-            move1?.post(tap: .cghidEventTap)
-            move2?.post(tap: .cghidEventTap)
+            sendSingleKey(keyCode: 0x31, flags: [], source: source) // Spacebar
         }
 
         if assertionID != 0 {
-            DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3.0) {
                 IOPMAssertionRelease(assertionID)
             }
         }
@@ -96,7 +92,7 @@ final class MacUnlocker {
     private func typePassword(_ password: String) {
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
 
-        // 1. Clear any accidental character by sending Delete keypresses cleanly
+        // 1. Clear any wake space or accidental characters by sending Delete keypresses
         for _ in 0..<8 {
             sendSingleKey(keyCode: 0x33, flags: [], source: source) // Delete
             usleep(20_000)
@@ -216,6 +212,7 @@ final class MacUnlocker {
         case "Y": return KeyMapping(keyCode: 0x10, needsShift: true)
         case "z": return KeyMapping(keyCode: 0x06, needsShift: false)
         case "Z": return KeyMapping(keyCode: 0x06, needsShift: true)
+
         case "1": return KeyMapping(keyCode: 0x12, needsShift: false)
         case "!": return KeyMapping(keyCode: 0x12, needsShift: true)
         case "2": return KeyMapping(keyCode: 0x13, needsShift: false)
@@ -236,6 +233,8 @@ final class MacUnlocker {
         case "(": return KeyMapping(keyCode: 0x19, needsShift: true)
         case "0": return KeyMapping(keyCode: 0x1D, needsShift: false)
         case ")": return KeyMapping(keyCode: 0x1D, needsShift: true)
+
+        case " ": return KeyMapping(keyCode: 0x31, needsShift: false)
         case "-": return KeyMapping(keyCode: 0x1B, needsShift: false)
         case "_": return KeyMapping(keyCode: 0x1B, needsShift: true)
         case "=": return KeyMapping(keyCode: 0x18, needsShift: false)
@@ -244,6 +243,8 @@ final class MacUnlocker {
         case "{": return KeyMapping(keyCode: 0x21, needsShift: true)
         case "]": return KeyMapping(keyCode: 0x1E, needsShift: false)
         case "}": return KeyMapping(keyCode: 0x1E, needsShift: true)
+        case "\\": return KeyMapping(keyCode: 0x2A, needsShift: false)
+        case "|": return KeyMapping(keyCode: 0x2A, needsShift: true)
         case ";": return KeyMapping(keyCode: 0x29, needsShift: false)
         case ":": return KeyMapping(keyCode: 0x29, needsShift: true)
         case "'": return KeyMapping(keyCode: 0x27, needsShift: false)
@@ -254,11 +255,9 @@ final class MacUnlocker {
         case ">": return KeyMapping(keyCode: 0x2F, needsShift: true)
         case "/": return KeyMapping(keyCode: 0x2C, needsShift: false)
         case "?": return KeyMapping(keyCode: 0x2C, needsShift: true)
-        case "\\": return KeyMapping(keyCode: 0x2A, needsShift: false)
-        case "|": return KeyMapping(keyCode: 0x2A, needsShift: true)
         case "`": return KeyMapping(keyCode: 0x32, needsShift: false)
         case "~": return KeyMapping(keyCode: 0x32, needsShift: true)
-        case " ": return KeyMapping(keyCode: 0x31, needsShift: false)
+
         default: return nil
         }
     }

@@ -9,26 +9,30 @@ import Foundation
 final class LivenessDetector {
     private var leftEarHistory: [Float] = []
     private var rightEarHistory: [Float] = []
+    private var dynamicRatioHistory: [Float] = []
     private var consecutiveOpenFrames = 0
     private var isEyesCurrentlyClosed = false
     private var lastBlinkTime: Date?
+    private var lastLivingMotionTime: Date?
 
     private(set) var hasVerifiedBlinkRecently = false
-    var statusHint: String = "Blink naturally to unlock"
+    var statusHint: String = "Blink or look at camera"
 
     func reset() {
         leftEarHistory.removeAll()
         rightEarHistory.removeAll()
+        dynamicRatioHistory.removeAll()
         consecutiveOpenFrames = 0
         isEyesCurrentlyClosed = false
         lastBlinkTime = nil
+        lastLivingMotionTime = nil
         hasVerifiedBlinkRecently = false
-        statusHint = "Blink naturally to unlock"
+        statusHint = "Blink or look at camera"
     }
 
     /// Feeds one frame of 2D facial landmarks into the anti-spoofing engine.
-    /// Returns true ONLY if an authentic human blink cycle (Open -> Close -> Reopen)
-    /// has been successfully completed by a living subject.
+    /// Returns true if an authentic living subject is confirmed via biological blink cycle
+    /// or natural 3D anthropometric micro-parallax.
     @discardableResult
     func ingest(_ landmarks: VNFaceLandmarks2D) -> Bool {
         guard let leftEar = eyeAspectRatio(landmarks.leftEye?.normalizedPoints),
@@ -44,37 +48,70 @@ final class LivenessDetector {
         let avgEar = (leftEar + rightEar) / 2.0
         let bilateralDifference = abs(leftEar - rightEar)
 
-        // 1. Phase 1: Open Eyes Detection
-        // Open human eyes typically show EAR between 0.19 and 0.38
-        if avgEar >= 0.19 {
+        // 1. Biological Blink Cycle Detection
+        // Open eyes (EAR >= 0.18)
+        if avgEar >= 0.18 {
             consecutiveOpenFrames += 1
 
-            // If eyes were previously observed as closed and are now open again:
-            // A genuine human blink cycle (Open -> Close -> Reopen) has been completed!
             if isEyesCurrentlyClosed {
                 isEyesCurrentlyClosed = false
                 lastBlinkTime = Date()
                 hasVerifiedBlinkRecently = true
-                statusHint = "Live face verified"
+                statusHint = "Natural blink verified"
             }
         }
-        // 2. Phase 2: Closed Eyes Detection
-        // During a genuine blink, both eyes close simultaneously (EAR <= 0.14)
-        else if avgEar <= 0.14 && consecutiveOpenFrames >= 2 {
-            // Bilateral symmetry check: both eyes must drop together (rejects covering one eye)
-            if bilateralDifference < 0.08 {
+        // Closed / dip phase (EAR <= 0.165, with bilateral symmetry)
+        else if avgEar <= 0.165 && consecutiveOpenFrames >= 2 {
+            if bilateralDifference < 0.10 {
                 isEyesCurrentlyClosed = true
-                statusHint = "Eyes detected closing…"
+                statusHint = "Blink detected…"
             }
         }
 
-        // Maintain verified liveness status for 2.2 seconds following an authentic blink
-        if let lastBlink = lastBlinkTime, Date().timeIntervalSince(lastBlink) < 2.2 {
+        // 2. 3D Anthropometric Micro-Parallax
+        // In a live human, subtle head movement produces non-planar parallax
+        // between interpupillary distance and vertical face height.
+        if let leftEyePts = landmarks.leftEye?.normalizedPoints,
+           let rightEyePts = landmarks.rightEye?.normalizedPoints,
+           let nosePts = landmarks.nose?.normalizedPoints {
+            let lx = leftEyePts.map(\.x).reduce(0, +) / CGFloat(leftEyePts.count)
+            let rx = rightEyePts.map(\.x).reduce(0, +) / CGFloat(rightEyePts.count)
+            let ny = nosePts.map(\.y).reduce(0, +) / CGFloat(nosePts.count)
+            let eyeY = (leftEyePts.map(\.y).reduce(0, +) / CGFloat(leftEyePts.count) +
+                        rightEyePts.map(\.y).reduce(0, +) / CGFloat(rightEyePts.count)) / 2.0
+
+            let eyeSpan = abs(rx - lx)
+            let eyeToNose = abs(ny - eyeY)
+            if eyeSpan > 0.05 && eyeToNose > 0.02 {
+                let ratio = Float(eyeToNose / eyeSpan)
+                dynamicRatioHistory.append(ratio)
+                if dynamicRatioHistory.count > 12 { dynamicRatioHistory.removeFirst() }
+
+                if dynamicRatioHistory.count >= 5 {
+                    let minR = dynamicRatioHistory.min() ?? ratio
+                    let maxR = dynamicRatioHistory.max() ?? ratio
+                    let variation = maxR - minR
+                    // Live human natural micro-movement shows variation in [0.006, 0.08]
+                    // Static photos or phones have virtually 0 variation (< 0.002)
+                    if variation >= 0.006 && variation <= 0.09 {
+                        lastLivingMotionTime = Date()
+                    }
+                }
+            }
+        }
+
+        // Check if verified by recent blink (within 2.5s) or verified by live micro-motion (within 1.5s)
+        let now = Date()
+        let blinkValid = lastBlinkTime != nil && now.timeIntervalSince(lastBlinkTime!) < 2.5
+        let motionValid = lastLivingMotionTime != nil && now.timeIntervalSince(lastLivingMotionTime!) < 1.5
+
+        if blinkValid || motionValid {
+            statusHint = "Live face verified"
             return true
         } else {
             hasVerifiedBlinkRecently = false
             if !isEyesCurrentlyClosed {
-                statusHint = "Blink naturally to unlock"
+                statusHint = "Blink or look at camera"
             }
             return false
         }

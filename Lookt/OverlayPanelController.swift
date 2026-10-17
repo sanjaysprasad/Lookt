@@ -2,11 +2,11 @@ import SwiftUI
 import AppKit
 import Combine
 
-/// Displays a sleek floating Face ID capsule right beneath the top menu bar / notch,
-/// elevated above the lock screen and screensaver, mimicking the iPhone Face ID unlock prompt.
+/// Displays a sleek Dynamic Island expanding organically out of the MacBook notch
+/// elevated above the lock screen and all desktop windows.
 final class OverlayPanelController {
     private var panel: NSPanel?
-    private var hostingController: NSHostingController<FaceIDScanView>?
+    private var hostingController: NSHostingController<DynamicIslandView>?
     private var cancellables = Set<AnyCancellable>()
     private var hideWorkItem: DispatchWorkItem?
 
@@ -18,7 +18,7 @@ final class OverlayPanelController {
 
         NotificationCenter.default.publisher(for: .looktMatched)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.show(state: .success, autoHideAfter: 1.8) }
+            .sink { [weak self] _ in self?.show(state: .success, autoHideAfter: 2.2) }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktScanEnded)
@@ -31,9 +31,10 @@ final class OverlayPanelController {
         dispatchPrecondition(condition: .onQueue(.main))
         hideWorkItem?.cancel()
 
+        let islandView = DynamicIslandView(state: state)
+
         if panel == nil {
-            let scanView = FaceIDScanView(state: state, size: 100)
-            let hosting = NSHostingController(rootView: scanView)
+            let hosting = NSHostingController(rootView: islandView)
             hostingController = hosting
 
             let p = NSPanel(contentViewController: hosting)
@@ -42,10 +43,10 @@ final class OverlayPanelController {
             p.titlebarAppearsTransparent = true
             p.isFloatingPanel = true
 
-            // Set window level to maximumWindow so it floats on top of the lock screen and screensaver
-            p.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+            // Set window level to maximum level so it is visible over lockscreen / screensaver
+            p.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()) + 25)
 
-            // Ensure window displays across all virtual spaces, full screen, and lock screens
+            // Attach to all desktop spaces, fullscreen apps, and lock sessions
             p.collectionBehavior = [
                 .canJoinAllSpaces,
                 .fullScreenAuxiliary,
@@ -57,13 +58,13 @@ final class OverlayPanelController {
             p.isOpaque = false
             p.hasShadow = false
             p.hidesOnDeactivate = false
-            p.setContentSize(NSSize(width: 140, height: 140))
+            p.setContentSize(NSSize(width: 320, height: 90))
             panel = p
         } else {
-            hostingController?.rootView = FaceIDScanView(state: state, size: 100)
+            hostingController?.rootView = islandView
         }
 
-        positionNearTopCenter()
+        positionAtNotch()
         panel?.orderFrontRegardless()
 
         if let delay = autoHideAfter {
@@ -79,11 +80,15 @@ final class OverlayPanelController {
         panel?.orderOut(nil)
     }
 
-    private func positionNearTopCenter() {
-        guard let panel = panel, let screen = NSScreen.main else { return }
+    private func positionAtNotch() {
+        guard let panel = panel else { return }
+        // Fall back to first screen if main screen is nil during lock / wake
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
         let screenFrame = screen.frame
         let x = screenFrame.midX - panel.frame.width / 2
-        let y = screenFrame.maxY - panel.frame.height - 35
+        // Flush against the top bezel of the screen directly at the notch
+        let y = screenFrame.maxY - panel.frame.height
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

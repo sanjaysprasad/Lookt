@@ -46,14 +46,16 @@ final class FaceAuthController {
         }
     }
 
-    func cancelAuthAttempt() {
+    func cancelAuthAttempt(notifyScanEnded: Bool = true) {
         cancellable?.cancel()
         cancellable = nil
         timeoutWorkItem?.cancel()
         timeoutWorkItem = nil
         camera.stop()
         brightness.restore()
-        NotificationCenter.default.post(name: .looktScanEnded, object: nil)
+        if notifyScanEnded {
+            NotificationCenter.default.post(name: .looktScanEnded, object: nil)
+        }
     }
 
     private func subscribe() {
@@ -98,14 +100,17 @@ final class FaceAuthController {
 
     private func armTimeout() {
         let workItem = DispatchWorkItem { [weak self] in
-            self?.cancelAuthAttempt()
+            self?.cancelAuthAttempt(notifyScanEnded: true)
         }
         timeoutWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
     }
 
     private func onAuthSuccess() {
-        cancelAuthAttempt()
+        // Stop camera and restore brightness without posting looktScanEnded
+        cancelAuthAttempt(notifyScanEnded: false)
+
+        // Show the success animation over the lock screen
         NotificationCenter.default.post(name: .looktMatched, object: nil)
 
         // Read user's chosen unlock mode

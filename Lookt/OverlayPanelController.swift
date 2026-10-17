@@ -3,7 +3,7 @@ import AppKit
 import Combine
 
 /// Displays a sleek floating Face ID capsule right beneath the top menu bar / notch,
-/// mimicking the iPhone Dynamic Island Face ID unlock prompt.
+/// elevated above the lock screen and screensaver, mimicking the iPhone Face ID unlock prompt.
 final class OverlayPanelController {
     private var panel: NSPanel?
     private var hostingController: NSHostingController<FaceIDScanView>?
@@ -18,7 +18,7 @@ final class OverlayPanelController {
 
         NotificationCenter.default.publisher(for: .looktMatched)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.show(state: .success, autoHideAfter: 1.2) }
+            .sink { [weak self] _ in self?.show(state: .success, autoHideAfter: 1.8) }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktScanEnded)
@@ -32,24 +32,35 @@ final class OverlayPanelController {
         hideWorkItem?.cancel()
 
         if panel == nil {
-            let scanView = FaceIDScanView(state: state, size: 96)
+            let scanView = FaceIDScanView(state: state, size: 100)
             let hosting = NSHostingController(rootView: scanView)
             hostingController = hosting
 
             let p = NSPanel(contentViewController: hosting)
-            p.styleMask = [.nonactivatingPanel, .titled, .fullSizeContentView]
+            p.styleMask = [.nonactivatingPanel, .borderless]
             p.titleVisibility = .hidden
             p.titlebarAppearsTransparent = true
             p.isFloatingPanel = true
-            p.level = .floating
+
+            // Set window level to maximumWindow so it floats on top of the lock screen and screensaver
+            p.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+
+            // Ensure window displays across all virtual spaces, full screen, and lock screens
+            p.collectionBehavior = [
+                .canJoinAllSpaces,
+                .fullScreenAuxiliary,
+                .stationary,
+                .ignoresCycle
+            ]
+
             p.backgroundColor = .clear
             p.isOpaque = false
-            p.hasShadow = false // FaceIDScanView handles its own glowing shadow
-            p.setContentSize(NSSize(width: 130, height: 130))
-            p.isMovableByWindowBackground = false
+            p.hasShadow = false
+            p.hidesOnDeactivate = false
+            p.setContentSize(NSSize(width: 140, height: 140))
             panel = p
         } else {
-            hostingController?.rootView = FaceIDScanView(state: state, size: 96)
+            hostingController?.rootView = FaceIDScanView(state: state, size: 100)
         }
 
         positionNearTopCenter()
@@ -70,9 +81,9 @@ final class OverlayPanelController {
 
     private func positionNearTopCenter() {
         guard let panel = panel, let screen = NSScreen.main else { return }
-        let screenFrame = screen.visibleFrame
+        let screenFrame = screen.frame
         let x = screenFrame.midX - panel.frame.width / 2
-        let y = screenFrame.maxY - panel.frame.height - 40
+        let y = screenFrame.maxY - panel.frame.height - 35
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

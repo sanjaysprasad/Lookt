@@ -47,27 +47,28 @@ final class MacUnlocker {
 
         switch mode {
         case .wakeOnly:
-            // Waking display + short delay + pressing Space to focus the password prompt
-            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.pressKey(virtualKey: 0x31) // Space bar
+            // Wake display and send a non-destructive Shift key to reveal the password prompt
+            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                self?.wakePromptWithShift()
             }
 
         case .autoUnlock:
             guard let password = KeychainStore.loadLoginPassword(), !password.isEmpty else {
-                // If password is not stored, gracefully fall back to wake only
-                DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                    self?.pressKey(virtualKey: 0x31)
+                // If password is not set, fall back to waking prompt
+                DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                    self?.wakePromptWithShift()
                 }
                 return
             }
 
-            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            // Allow display and loginwindow 0.5s to illuminate and prepare the password field
+            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.typePassword(password)
             }
         }
     }
 
-    /// Wakes the display using an IOKit power assertion and caffeinate signal.
+    /// Wakes the display using an IOKit power assertion and caffeinate user activity signal.
     private func wakeDisplay() {
         var assertionID: IOPMAssertionID = 0
         let reason = "Lookt Face ID Match Wake" as CFString
@@ -76,44 +77,64 @@ final class MacUnlocker {
                                     reason,
                                     &assertionID)
 
-        // Run caffeinate user activity probe to signal screen wake
         let task = Process()
         task.launchPath = "/usr/bin/caffeinate"
-        task.arguments = ["-u", "-t", "2"]
+        task.arguments = ["-u", "-t", "3"]
         try? task.run()
 
         if assertionID != 0 {
-            DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) {
                 IOPMAssertionRelease(assertionID)
             }
         }
     }
 
+    /// Safely wakes the lock screen clock/screensaver without typing any character into the password field.
+    private func wakePromptWithShift() {
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        pressKey(virtualKey: 0x38, source: source) // Left Shift
+    }
+
     /// Simulates typing the password and pressing Return using CoreGraphics HID events.
     private func typePassword(_ password: String) {
-        // Send a wake-up key (Space/Esc) to ensure password field is focused
-        pressKey(virtualKey: 0x35) // Esc to clear any stale screensaver overlay
-        usleep(150_000) // 150ms
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
 
-        let utf16 = Array(password.utf16)
-        for char in utf16 {
-            guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-                  let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else { continue }
+        // 1. Wake the lock screen prompt safely using Shift key (does not type a character)
+        pressKey(virtualKey: 0x38, source: source)
+        usleep(300_000) // 300ms for password input animation to stabilize
+
+        // 2. Clear any stale contents in the password field (Cmd+A -> Delete)
+        if let selectAllDown = CGEvent(keyboardEventSource: source, virtualKey: 0x00, keyDown: true), // 'a'
+           let selectAllUp = CGEvent(keyboardEventSource: source, virtualKey: 0x00, keyDown: false) {
+            selectAllDown.flags = .maskCommand
+            selectAllUp.flags = .maskCommand
+            selectAllDown.post(tap: .cghidEventTap)
+            selectAllUp.post(tap: .cghidEventTap)
+            usleep(50_000)
+            pressKey(virtualKey: 0x33, source: source) // Delete / Backspace
+            usleep(50_000)
+        }
+
+        // 3. Type each character of the password
+        for char in password.utf16 {
+            guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                  let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else { continue }
             var codeUnit = char
             keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &codeUnit)
             keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &codeUnit)
             keyDown.post(tap: .cghidEventTap)
             keyUp.post(tap: .cghidEventTap)
-            usleep(10_000) // 10ms between keystrokes
+            usleep(15_000) // 15ms per character
         }
 
-        usleep(100_000) // 100ms before Return
-        pressKey(virtualKey: 0x24) // Return / Enter
+        // 4. Send Return to submit the password
+        usleep(150_000) // 150ms pause before Enter
+        pressKey(virtualKey: 0x24, source: source) // Return / Enter
     }
 
-    private func pressKey(virtualKey: CGKeyCode) {
-        guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: virtualKey, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: virtualKey, keyDown: false) else { return }
+    private func pressKey(virtualKey: CGKeyCode, source: CGEventSource) {
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false) else { return }
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
     }

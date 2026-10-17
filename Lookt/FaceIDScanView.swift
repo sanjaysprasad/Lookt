@@ -30,7 +30,7 @@ struct FaceIDScanView: View {
         }
         .frame(width: 110, height: 110)
         .onAppear { startRotationIfNeeded() }
-        .onChange(of: state) { _ in startRotationIfNeeded() }
+        .onChange(of: state) { startRotationIfNeeded() }
     }
 
     private var iconName: String {

@@ -7,6 +7,7 @@ import Combine
 /// leave the process.
 final class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private let session = AVCaptureSession()
+    private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     private let outputQueue = DispatchQueue(label: "camera.frame.queue")
     let framePublisher = PassthroughSubject<CIImage, Never>()
 
@@ -18,13 +19,25 @@ final class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
     func requestAccessAndStart(completion: @escaping (Bool) -> Void) {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            configureAndStart()
-            completion(true)
+            sessionQueue.async { [weak self] in
+                self?.configureAndStart()
+                DispatchQueue.main.async {
+                    completion(true)
+                }
+            }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                DispatchQueue.main.async {
-                    if granted { self?.configureAndStart() }
-                    completion(granted)
+                if granted {
+                    self?.sessionQueue.async {
+                        self?.configureAndStart()
+                        DispatchQueue.main.async {
+                            completion(true)
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        completion(false)
+                    }
                 }
             }
         default:
@@ -61,24 +74,18 @@ final class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
     }
 
     func stop() {
-        guard isRunning else { return }
-        session.stopRunning()
-        isRunning = false
+        sessionQueue.async { [weak self] in
+            guard let self = self, self.isRunning else { return }
+            self.session.stopRunning()
+            self.isRunning = false
+        }
     }
 
     /// Opts this app out of Center Stage / Portrait / Studio Light / Reactions —
     /// macOS's built-in camera video-effects pipeline. These are applied at
     /// the system level and can interfere with raw frame delivery for apps
-    /// doing their own face analysis (this matches the "Portrait.framework
-    /// lighting.vfx" errors in Console — that's the effects pipeline trying
-    /// to load and failing, not a crash in our code, but best avoided
-    /// entirely since we don't want stylized frames anyway).
+    /// doing their own face analysis.
     private func disableSystemVideoEffects() {
-        // Only Center Stage is actually app-controllable on macOS.
-        // Portrait/Studio Light/Reactions exist as system-wide user
-        // settings (Control Center) but aren't exposed for apps to
-        // override on macOS — attempting to compiles as an error, unlike
-        // iOS where the full set is available.
         if #available(macOS 13.0, *) {
             AVCaptureDevice.centerStageControlMode = .app
             AVCaptureDevice.isCenterStageEnabled = false

@@ -10,11 +10,11 @@ enum EnrollmentStep: Int, CaseIterable {
         case .lookStraight: return "Look straight at the camera"
         case .turnLeft: return "Slowly turn your head slightly left"
         case .turnRight: return "Slowly turn your head slightly right"
-        case .dimLight: return "Optional: repeat in a dimmer room for a stronger profile"
+        case .dimLight: return "Optional: dim room lighting for night profile"
         }
     }
 
-    var framesToCapture: Int { 3 } // 2-3 captures per condition, per your spec
+    var framesToCapture: Int { 3 } // 2-3 captures per condition
 }
 
 /// Runs the one-time enrollment sequence: for each condition (straight,
@@ -22,11 +22,6 @@ enum EnrollmentStep: Int, CaseIterable {
 /// embeddings, and average them into one reference vector per condition.
 /// The whole set (not just one vector) is stored so matching can compare
 /// against multiple reference points.
-///
-/// Captures are deliberately spaced out (not just "the next 3 camera
-/// frames", which arrive a fraction of a second apart and look nearly
-/// identical) — real spacing gives more natural variation, which makes
-/// the resulting reference embeddings meaningfully better for matching.
 final class FaceEnrollmentController: ObservableObject {
     @Published var currentStep: EnrollmentStep = .lookStraight
     @Published var framesCapturedInStep = 0
@@ -48,11 +43,21 @@ final class FaceEnrollmentController: ObservableObject {
     /// Exposed so the enrollment UI can show a live preview.
     var previewSession: AVCaptureSession { camera.captureSession }
 
+    init() {
+        if KeychainStore.hasEnrollment() {
+            isComplete = true
+            let count = KeychainStore.loadEmbeddings().count
+            statusMessage = "Enrolled (\(count) reference profiles saved)."
+        }
+    }
+
     /// Resets everything so enrollment can be run again from scratch —
     /// used by the "Re-enroll" button.
     func reset() {
         cancellable?.cancel()
+        cancellable = nil
         readyWorkItem?.cancel()
+        readyWorkItem = nil
         camera.stop()
         currentStep = .lookStraight
         framesCapturedInStep = 0
@@ -77,10 +82,12 @@ final class FaceEnrollmentController: ObservableObject {
         }
     }
 
-    /// Shows a short "get ready" pause before capturing starts for a step,
-    /// giving you time to actually get into position (especially for the
-    /// turn-left/turn-right steps) rather than capturing whatever you
-    /// happened to be doing the instant the step changed.
+    /// Skips the current step if it is optional (dim light).
+    func skipCurrentStep() {
+        guard currentStep == .dimLight else { return }
+        finishEnrollment()
+    }
+
     private func beginCaptureForCurrentStep() {
         isCapturingAllowed = false
         lastCaptureTime = nil
@@ -141,7 +148,9 @@ final class FaceEnrollmentController: ObservableObject {
     private func finishEnrollment() {
         camera.stop()
         cancellable?.cancel()
+        cancellable = nil
         readyWorkItem?.cancel()
+        readyWorkItem = nil
         let saved = KeychainStore.saveEmbeddings(allEnrolledEmbeddings)
         statusMessage = saved ? "Enrollment complete — \(allEnrolledEmbeddings.count) reference profiles saved."
                                : "Failed to save enrollment. Try again."

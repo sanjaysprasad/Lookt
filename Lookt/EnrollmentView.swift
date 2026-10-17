@@ -6,59 +6,71 @@ struct EnrollmentView: View {
     @State private var hasStarted = false
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Lookt")
-                .font(.title2).bold()
+        ScrollView {
+            VStack(spacing: 16) {
+                Text("Lookt")
+                    .font(.title2).bold()
 
-            if hasStarted && !controller.isComplete {
-                CameraPreviewView(session: controller.previewSession)
-                    .frame(width: 280, height: 210)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor, lineWidth: 2))
-            } else {
-                FaceIDScanView(state: controller.isComplete ? .success : .idle)
-                    .frame(height: 210)
-            }
-
-            Text(controller.statusMessage)
-                .multilineTextAlignment(.center)
-                .frame(width: 320)
-
-            if !controller.isComplete {
-                Button("Start Enrollment") {
-                    hasStarted = true
-                    controller.start()
+                if hasStarted && !controller.isComplete {
+                    CameraPreviewView(session: controller.previewSession)
+                        .frame(width: 280, height: 210)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor, lineWidth: 2))
+                } else {
+                    FaceIDScanView(state: controller.isComplete ? .success : .idle)
+                        .frame(height: 210)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(hasStarted)
-            } else {
-                Text("Lookt will now watch for your face whenever the screen is locked.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(width: 320)
+
+                Text(controller.statusMessage)
                     .multilineTextAlignment(.center)
+                    .frame(width: 320)
 
-                Button("Re-enroll") {
-                    controller.reset()
-                    hasStarted = false
+                if !controller.isComplete {
+                    HStack(spacing: 12) {
+                        Button("Start Enrollment") {
+                            hasStarted = true
+                            controller.start()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(hasStarted)
+
+                        if hasStarted && controller.currentStep == .dimLight {
+                            Button("Skip") {
+                                controller.skipCurrentStep()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                } else {
+                    Text("Lookt will now watch for your face whenever the screen is locked.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 320)
+                        .multilineTextAlignment(.center)
+
+                    Button("Re-enroll") {
+                        controller.reset()
+                        hasStarted = false
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
+
+                Divider().padding(.top, 4)
+
+                Toggle("Launch Lookt at login", isOn: Binding(
+                    get: { loginItem.isEnabled },
+                    set: { loginItem.setEnabled($0) }
+                ))
+                .toggleStyle(.switch)
+
+                if controller.isComplete {
+                    TestScanSection()
+                }
             }
-
-            Divider().padding(.top, 4)
-
-            Toggle("Launch Lookt at login", isOn: Binding(
-                get: { loginItem.isEnabled },
-                set: { loginItem.setEnabled($0) }
-            ))
-            .toggleStyle(.switch)
-
-            if controller.isComplete {
-                TestScanSection()
-            }
+            .padding(30)
+            .frame(maxWidth: .infinity)
         }
-        .padding(30)
-        .frame(width: 400, height: controller.isComplete ? 660 : 460)
+        .frame(minWidth: 400, maxWidth: 500, minHeight: 460, maxHeight: .infinity)
     }
 }
 
@@ -95,6 +107,9 @@ private struct TestScanSection: View {
                     Text(String(format: "Live match score: %.2f", test.lastScore))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    Text("Blink and move slightly to satisfy liveness check")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -109,7 +124,7 @@ private struct TestScanSection: View {
                 }
             }
             .buttonStyle(.bordered)
-            .onChange(of: test.scanState) { newState in
+            .onChange(of: test.scanState) { _, newState in
                 // Auto-flip the button back to "Try Again" once scanning
                 // ends on its own (success or timeout), without needing
                 // the user to click Stop first.

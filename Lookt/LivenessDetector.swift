@@ -54,11 +54,14 @@ final class LivenessDetector {
 
     private func eyeAspectRatio(_ landmarks: VNFaceLandmarks2D) -> Float? {
         guard let eye = landmarks.leftEye?.normalizedPoints, eye.count >= 6 else { return nil }
-        // Simplified EAR: vertical eye opening vs horizontal eye width.
-        let vertical = abs(eye[1].y - eye[5].y) + abs(eye[2].y - eye[4].y)
-        let horizontal = abs(eye[0].x - eye[3].x)
+        let xs = eye.map(\.x)
+        let ys = eye.map(\.y)
+        guard let minX = xs.min(), let maxX = xs.max(),
+              let minY = ys.min(), let maxY = ys.max() else { return nil }
+        let horizontal = maxX - minX
+        let vertical = maxY - minY
         guard horizontal > 0 else { return nil }
-        return Float(vertical / (2 * horizontal))
+        return Float(vertical / horizontal)
     }
 
     private func checkForBlink() {
@@ -66,7 +69,7 @@ final class LivenessDetector {
         // A blink = a brief dip well below the recent baseline.
         let baseline = earHistory.dropLast(3).reduce(0, +) / Float(max(earHistory.count - 3, 1))
         let recentMin = earHistory.suffix(3).min() ?? baseline
-        if baseline - recentMin > 0.06 {
+        if baseline - recentMin > 0.05 {
             blinkDetected = true
         }
     }

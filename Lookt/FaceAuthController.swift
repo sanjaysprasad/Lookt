@@ -1,6 +1,7 @@
 import Combine
 import CoreImage
 import Vision
+import Foundation
 
 /// Coordinates a single Face ID attempt while the screen is locked:
 /// max brightness → watch camera → require liveness AND embedding match
@@ -12,8 +13,6 @@ import Vision
 /// field, so Touch ID / password entry remain the actual unlock
 /// mechanism — this reduces "face recognition bug = account takeover"
 /// risk while still saving the user the walk-up-and-notice step.
-/// If you want full auto-fill later, that's a deliberate, isolated
-/// decision to make once the matching pipeline is proven reliable.
 final class FaceAuthController {
     private let camera = CameraManager()
     private let embedder = VisionFaceEmbedder()
@@ -28,6 +27,8 @@ final class FaceAuthController {
 
     func beginAuthAttempt() {
         guard KeychainStore.hasEnrollment() else { return } // nothing enrolled, nothing to do
+        guard cancellable == nil else { return } // attempt already in progress
+
         consecutiveMatches = 0
         liveness.reset()
         brightness.maxOutBrightness()
@@ -42,7 +43,9 @@ final class FaceAuthController {
 
     func cancelAuthAttempt() {
         cancellable?.cancel()
+        cancellable = nil
         timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
         camera.stop()
         brightness.restore()
         NotificationCenter.default.post(name: .looktScanEnded, object: nil)
@@ -80,6 +83,9 @@ final class FaceAuthController {
         }
 
         if consecutiveMatches >= requiredConsecutiveMatches {
+            consecutiveMatches = 0
+            cancellable?.cancel()
+            cancellable = nil
             DispatchQueue.main.async { [weak self] in
                 self?.onAuthSuccess()
             }
@@ -97,8 +103,6 @@ final class FaceAuthController {
     private func onAuthSuccess() {
         cancelAuthAttempt()
         // Wake display + focus password field via Accessibility APIs here.
-        // Left as an integration point — depends on whether you're
-        // targeting the login window or just screensaver/lock overlay.
         NotificationCenter.default.post(name: .looktMatched, object: nil)
     }
 }

@@ -18,10 +18,11 @@ final class FaceTestController: ObservableObject {
     private let liveness = LivenessDetector()
     private var cancellable: AnyCancellable?
     private var consecutiveMatches = 0
-    private let requiredConsecutiveMatches = 4
-    private let matchThreshold: Float = 0.92
+    private let requiredConsecutiveMatches = 3
+    private let matchThreshold: Float = 0.88
     private var timeoutWorkItem: DispatchWorkItem?
     private let timeoutSeconds: TimeInterval = 10
+    private var isScanning = false
 
     var previewSession: AVCaptureSession { camera.captureSession }
 
@@ -33,12 +34,14 @@ final class FaceTestController: ObservableObject {
         }
         consecutiveMatches = 0
         liveness.reset()
+        isScanning = true
         scanState = .scanning
         resultMessage = "Scanning…"
 
         camera.requestAccessAndStart { [weak self] granted in
             guard let self = self else { return }
             guard granted else {
+                self.isScanning = false
                 self.scanState = .failed
                 self.resultMessage = "Camera access denied."
                 return
@@ -51,8 +54,11 @@ final class FaceTestController: ObservableObject {
     /// Stops the camera but leaves the last result (success/failed) visible
     /// rather than resetting to idle — so you can actually read the outcome.
     func stop() {
+        isScanning = false
         cancellable?.cancel()
+        cancellable = nil
         timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
         camera.stop()
     }
 
@@ -66,7 +72,7 @@ final class FaceTestController: ObservableObject {
 
     private func armTimeout() {
         let work = DispatchWorkItem { [weak self] in
-            guard let self = self, self.scanState == .scanning else { return }
+            guard let self = self, self.isScanning else { return }
             self.stop()
             self.scanState = .failed
             self.resultMessage = "No match found — try again with better lighting or a more direct angle."
@@ -88,8 +94,8 @@ final class FaceTestController: ObservableObject {
     }
 
     private func process(embedding: FaceEmbedding, landmarks: VNFaceLandmarks2D?, reference: [FaceEmbedding]) {
+        guard isScanning else { return } // ignore stray frames after timeout/success
         guard !embedding.isEmpty else { consecutiveMatches = 0; return }
-        guard scanState == .scanning else { return } // ignore stray frames after timeout/success
 
         var isLive = false
         if let landmarks = landmarks {
@@ -109,6 +115,10 @@ final class FaceTestController: ObservableObject {
         }
 
         if consecutiveMatches >= requiredConsecutiveMatches {
+            consecutiveMatches = 0
+            isScanning = false
+            cancellable?.cancel()
+            cancellable = nil
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.scanState = .success

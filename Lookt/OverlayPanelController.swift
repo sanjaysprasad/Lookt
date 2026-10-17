@@ -21,19 +21,23 @@ final class OverlayPanelController {
 
     func start() {
         NotificationCenter.default.publisher(for: .looktScanStarted)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.show(state: .scanning) }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktMatched)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.show(state: .success, autoHideAfter: 1.5) }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktScanEnded)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.hide() }
             .store(in: &cancellables)
     }
 
     private func show(state: ScanState, autoHideAfter: TimeInterval? = nil) {
+        dispatchPrecondition(condition: .onQueue(.main))
         hideWorkItem?.cancel()
 
         if panel == nil {
@@ -67,6 +71,7 @@ final class OverlayPanelController {
     }
 
     private func hide() {
+        dispatchPrecondition(condition: .onQueue(.main))
         hideWorkItem?.cancel()
         panel?.orderOut(nil)
     }

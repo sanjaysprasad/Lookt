@@ -1,0 +1,17 @@
+<!-- Add these keys to your Xcode project's Info.plist (Target > Info tab) -->
+
+<key>NSCameraUsageDescription</key>
+<string>Lookt uses your camera to recognize your face and unlock your Mac faster.</string>
+
+<!-- Required entitlement, add via Signing & Capabilities > + Capability > Hardened Runtime -->
+<!-- Then under Hardened Runtime, enable: Camera -->
+
+<!-- App Sandbox: for a menu bar utility like this, you'll likely want
+     Sandbox OFF (or carefully scoped) since:
+       - LockScreenWatcher uses DistributedNotificationCenter (works sandboxed, fine)
+       - BrightnessController uses a private framework (will NOT pass App
+         Store review; fine for a personal/direct-distribution build,
+         notarize instead of submitting to the Store)
+       - Any future keystroke-injection code needs Accessibility permission,
+         which requires the app be signed and NOT sandboxed
+-->

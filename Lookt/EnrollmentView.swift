@@ -7,8 +7,12 @@ struct EnrollmentView: View {
 
     @StateObject private var loginItem = LoginItemManager()
     @State private var profiles: [FaceProfile] = []
-    @State private var isShowingEnrollmentSheet = false
-    @State private var isShowingPasswordSheet = false
+    private enum ActiveSheet: String, Identifiable {
+        case enrollment
+        case password
+        var id: String { rawValue }
+    }
+    @State private var activeSheet: ActiveSheet?
     @State private var profileToDelete: FaceProfile?
     @State private var isShowingDeleteAlert = false
     @State private var hasPassword = false
@@ -47,11 +51,13 @@ struct EnrollmentView: View {
         .onAppear {
             refreshData()
         }
-        .sheet(isPresented: $isShowingEnrollmentSheet, onDismiss: refreshData) {
-            EnrollmentModalView()
-        }
-        .sheet(isPresented: $isShowingPasswordSheet, onDismiss: refreshData) {
-            PasswordSetupModalView()
+        .sheet(item: $activeSheet, onDismiss: refreshData) { sheet in
+            switch sheet {
+            case .enrollment:
+                EnrollmentModalView()
+            case .password:
+                PasswordSetupModalView()
+            }
         }
         .alert("Delete Face Profile", isPresented: $isShowingDeleteAlert, presenting: profileToDelete) { profile in
             Button("Delete", role: .destructive) {
@@ -115,14 +121,14 @@ struct EnrollmentView: View {
                 Spacer()
 
                 Button {
-                    isShowingEnrollmentSheet = true
+                    activeSheet = .enrollment
                 } label: {
                     Label("Add Face Style", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
 
-            let legacyProfiles = profiles.filter { ($0.embeddings.first?.count ?? 0) != 522 }
+            let legacyProfiles = profiles.filter { !$0.isNeural }
             if !legacyProfiles.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .top, spacing: 12) {
@@ -148,7 +154,7 @@ struct EnrollmentView: View {
                                 _ = KeychainStore.deleteProfile(id: legacy.id)
                             }
                             refreshData()
-                            isShowingEnrollmentSheet = true
+                            activeSheet = .enrollment
                         } label: {
                             Label("Upgrade & Re-Enroll Now", systemImage: "arrow.triangle.2.circlepath")
                         }
@@ -176,7 +182,7 @@ struct EnrollmentView: View {
                         .frame(maxWidth: 360)
 
                     Button("Enroll Primary Face") {
-                        isShowingEnrollmentSheet = true
+                        activeSheet = .enrollment
                     }
                     .buttonStyle(.bordered)
                 }
@@ -208,7 +214,7 @@ struct EnrollmentView: View {
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
 
-                                    if (profile.embeddings.first?.count ?? 0) == 522 {
+                                    if profile.isNeural {
                                         Text("Neural")
                                             .font(.caption2).bold()
                                             .padding(.horizontal, 6)
@@ -282,7 +288,7 @@ struct EnrollmentView: View {
                         Spacer()
 
                         Button(hasPassword ? "Change" : "Set Password") {
-                            isShowingPasswordSheet = true
+                            activeSheet = .password
                         }
                         .buttonStyle(.bordered)
 
@@ -379,7 +385,7 @@ private struct FaceTestSection: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(profiles.isEmpty || !profiles.contains { ($0.embeddings.first?.count ?? 0) == 522 })
+                .disabled(profiles.isEmpty || !profiles.contains(where: \.isNeural))
             }
 
             if isRunning || test.scanState != .idle {

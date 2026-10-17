@@ -34,7 +34,7 @@ final class FaceAuthController {
         guard isEnabled else { return }
 
         let profiles = KeychainStore.loadProfiles()
-        let neuralProfiles = profiles.filter { ($0.embeddings.first?.count ?? 0) == 522 }
+        let neuralProfiles = profiles.filter(\.isNeural)
 
         // If only legacy profiles exist, inform user directly via Dynamic Island
         guard !neuralProfiles.isEmpty else {

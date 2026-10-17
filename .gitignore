@@ -5,3 +5,6 @@ DerivedData/
 *.xcworkspace/xcuserdata/
 *.xcuserdatad/
 *.xcuserstate
+*.dmg
+build_temp/
+dmg_staging/

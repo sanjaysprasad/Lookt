@@ -95,6 +95,15 @@ Select the **Lookt** scheme, choose **My Mac (Mac Catalyst or macOS)**, and pres
 
 ---
 
+## 🤝 Acknowledgements & Open Source Credits
+
+Lookt is built with pride on the shoulders of the open-source community:
+- **MobileFaceNet (ArcFace)**: Lightweight deep face recognition model trained with additive angular margin loss for on-device biometric inference.
+- **[FaceGate-Mac](https://github.com/dweep-desai/FaceGate-Mac)** by [@dweep-desai](https://github.com/dweep-desai): Pre-compiled CoreML weights reference and normalization pipeline under the MIT License.
+- **Apple Vision & CoreML Teams**: For native hardware acceleration on the Apple Neural Engine.
+
+---
+
 ## 📄 License
 
 Lookt is released under the **MIT License**. See [LICENSE](LICENSE) for details.

@@ -139,29 +139,44 @@ struct DynamicIslandView: View {
             )
             .background(
                 Capsule(style: .continuous)
-                    .fill(Color.black)
+                    .fill(Color.black.opacity(0.88))
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    )
                     .overlay(
                         Capsule(style: .continuous)
                             .stroke(
                                 state == .success
-                                    ? AnyShapeStyle(Color(red: 0.18, green: 0.86, blue: 0.38).opacity(0.45))
-                                    : AnyShapeStyle(
+                                    ? AnyShapeStyle(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.24),
-                                                Color.white.opacity(0.06),
-                                                Color.white.opacity(0.14)
+                                                Color(red: 0.18, green: 0.86, blue: 0.38).opacity(0.8),
+                                                Color.white.opacity(0.4),
+                                                Color(red: 0.18, green: 0.86, blue: 0.38).opacity(0.4)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    : AnyShapeStyle(
+                                        LinearGradient(
+                                            stops: [
+                                                .init(color: Color.white.opacity(0.40), location: 0.0),
+                                                .init(color: Color.cyan.opacity(0.25), location: 0.35),
+                                                .init(color: Color.white.opacity(0.08), location: 0.70),
+                                                .init(color: Color.white.opacity(0.20), location: 1.0)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
                                     ),
-                                lineWidth: state == .success ? 1.5 : 1
+                                lineWidth: 1.2
                             )
                     )
                     .shadow(
-                        color: state == .success ? Color.green.opacity(0.35) : Color.black.opacity(0.45),
-                        radius: state == .success ? 16 : 14,
+                        color: state == .success ? Color.green.opacity(0.35) : Color.cyan.opacity(0.25),
+                        radius: state == .success ? 18 : 14,
                         x: 0,
                         y: 6
                     )

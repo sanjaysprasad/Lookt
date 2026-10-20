@@ -44,9 +44,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let hosting = NSHostingController(rootView: EnrollmentView())
             let window = NSWindow(contentViewController: hosting)
             window.title = "Lookt — Face ID for Mac"
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            window.setContentSize(NSSize(width: 560, height: 680))
-            window.minSize = NSSize(width: 500, height: 550)
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.isMovableByWindowBackground = true
+            window.backgroundColor = .clear
+            window.setContentSize(NSSize(width: 580, height: 740))
+            window.minSize = NSSize(width: 520, height: 620)
             window.center()
             window.isReleasedWhenClosed = false
             mainWindow = window

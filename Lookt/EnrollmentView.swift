@@ -20,40 +20,55 @@ struct EnrollmentView: View {
     @State private var isAccessibilityGranted = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 22) {
-                // Header Banner
-                headerSection
+        ZStack {
+            // Full-window Apple Liquid Glass vibrancy backdrop
+            VisualEffectBlur(material: .underWindowBackground, blendingMode: .behindWindow)
+                .ignoresSafeArea()
 
-                Divider()
+            // Dynamic Apple Liquid Glass ambient caustics
+            RadialGradient(
+                colors: [Color.cyan.opacity(0.12), Color.clear],
+                center: .topLeading,
+                startRadius: 20,
+                endRadius: 420
+            )
+            .ignoresSafeArea()
 
-                // Face Profiles Manager
-                profilesSection
+            RadialGradient(
+                colors: [Color(red: 0.18, green: 0.86, blue: 0.38).opacity(0.08), Color.clear],
+                center: .bottomTrailing,
+                startRadius: 40,
+                endRadius: 480
+            )
+            .ignoresSafeArea()
 
-                Divider()
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Header Banner with glowing Apple Liquid Glass logo
+                    headerSection
 
-                // Biometric Security Level Configuration
-                securitySection
+                    // Face Profiles Manager
+                    profilesSection
 
-                Divider()
+                    // Biometric Security Level Configuration
+                    securitySection
 
-                // Unlock Mode & Authentication Configuration
-                unlockModeSection
+                    // Unlock Mode & Authentication Configuration
+                    unlockModeSection
 
-                Divider()
+                    // Foreground Face ID Verification Harness
+                    FaceTestSection(profiles: profiles)
 
-                // Foreground Face ID Verification Harness
-                FaceTestSection(profiles: profiles)
-
-                Divider()
-
-                // Preferences
-                preferencesSection
+                    // Preferences
+                    preferencesSection
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 46)
+                .padding(.bottom, 28)
+                .frame(maxWidth: 580)
             }
-            .padding(26)
-            .frame(maxWidth: 580)
         }
-        .frame(minWidth: 540, idealWidth: 560, maxWidth: 650, minHeight: 620, idealHeight: 700)
+        .frame(minWidth: 540, idealWidth: 560, maxWidth: 650, minHeight: 640, idealHeight: 740)
         .onAppear {
             refreshData()
         }
@@ -83,32 +98,22 @@ struct EnrollmentView: View {
             Image("AppLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 70, height: 70)
-                .shadow(color: Color.cyan.opacity(0.35), radius: 8, x: 0, y: 3)
+                .frame(width: 66, height: 66)
+                .shadow(color: Color.cyan.opacity(0.4), radius: 10, x: 0, y: 4)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text("Lookt")
-                        .font(.title2).bold()
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
 
-                    Text(isLooktEnabled ? (profiles.isEmpty ? "No Profiles" : "Active") : "Paused")
-                        .font(.caption2).bold()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            isLooktEnabled
-                                ? (profiles.isEmpty ? Color.orange.opacity(0.2) : Color.green.opacity(0.2))
-                                : Color.secondary.opacity(0.2)
-                        )
-                        .foregroundColor(
-                            isLooktEnabled
-                                ? (profiles.isEmpty ? .orange : .green)
-                                : .secondary
-                        )
-                        .clipShape(Capsule())
+                    LiquidGlassPill(tintColor: isLooktEnabled ? (profiles.isEmpty ? .orange : .green) : .secondary) {
+                        Text(isLooktEnabled ? (profiles.isEmpty ? "No Profiles" : "Active") : "Paused")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundColor(isLooktEnabled ? (profiles.isEmpty ? .orange : .green) : .secondary)
+                    }
                 }
 
-                Text("Face ID unlock and authentication for your Mac.")
+                Text("Apple Liquid Glass • Neural Face ID for Mac")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -119,7 +124,8 @@ struct EnrollmentView: View {
                 .toggleStyle(.switch)
                 .labelsHidden()
         }
-        .padding(.vertical, 4)
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 20)
     }
 
     private var profilesSection: some View {
@@ -197,7 +203,7 @@ struct EnrollmentView: View {
                     .buttonStyle(.bordered)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
+                .padding(.vertical, 22)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06)))
             } else {
                 VStack(spacing: 8) {
@@ -205,9 +211,9 @@ struct EnrollmentView: View {
                         HStack(spacing: 14) {
                             Image(systemName: profile.style.iconName)
                                 .font(.title3)
-                                .foregroundColor(.accentColor)
+                                .foregroundColor(.cyan)
                                 .frame(width: 32, height: 32)
-                                .background(Circle().fill(Color.accentColor.opacity(0.12)))
+                                .background(Circle().fill(Color.cyan.opacity(0.14)))
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(profile.name)
@@ -256,11 +262,20 @@ struct EnrollmentView: View {
                             .help("Delete this face profile")
                         }
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.04))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                        )
                     }
                 }
             }
         }
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 18)
     }
 
     private var securitySection: some View {
@@ -288,6 +303,8 @@ struct EnrollmentView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 18)
     }
 
     private var securityDescription: String {
@@ -350,7 +367,11 @@ struct EnrollmentView: View {
                         }
                     }
                     .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.white.opacity(0.04))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                    )
 
                     // Accessibility Permission Row
                     HStack {
@@ -378,10 +399,16 @@ struct EnrollmentView: View {
                         }
                     }
                     .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.white.opacity(0.04))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                    )
                 }
             }
         }
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 18)
     }
 
     private var preferencesSection: some View {
@@ -398,6 +425,8 @@ struct EnrollmentView: View {
             Toggle("Boost screen brightness automatically in low light", isOn: $boostBrightness)
                 .toggleStyle(.switch)
         }
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 18)
     }
 
     private func refreshData() {
@@ -463,7 +492,7 @@ private struct FaceTestSection: View {
                             }
 
                             if isRunning {
-                                Text(String(format: "Neural Similarity: %.2f  (Match: >= 0.58)", test.lastScore))
+                                Text(String(format: "Neural Similarity: %.2f  (Match: >= 0.70)", test.lastScore))
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
 
@@ -477,9 +506,15 @@ private struct FaceTestSection: View {
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06)))
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                )
             }
         }
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 18)
         .onChange(of: test.scanState) { _, newState in
             if newState == .success || newState == .failed {
                 isRunning = false
@@ -498,101 +533,106 @@ private struct EnrollmentModalView: View {
     @State private var hasStarted = false
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image("AppLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 54, height: 54)
-                .shadow(color: Color.cyan.opacity(0.3), radius: 6, x: 0, y: 2)
+        ZStack {
+            VisualEffectBlur(material: .popover, blendingMode: .behindWindow)
+                .ignoresSafeArea()
 
-            Text("Add Face Profile")
-                .font(.title2).bold()
+            VStack(spacing: 16) {
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 54, height: 54)
+                    .shadow(color: Color.cyan.opacity(0.4), radius: 8, x: 0, y: 3)
 
-            if !hasStarted {
-                VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Profile Label")
-                            .font(.caption).bold().foregroundColor(.secondary)
-                        TextField("e.g. Sanjay (Default), Reading Glasses", text: $profileName)
-                            .textFieldStyle(.roundedBorder)
-                    }
+                Text("Add Face Profile")
+                    .font(.title2).bold()
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Appearance Style")
-                            .font(.caption).bold().foregroundColor(.secondary)
-
-                        Picker("Style", selection: $selectedStyle) {
-                            ForEach(ProfileStyle.allCases) { style in
-                                Label(style.rawValue, systemImage: style.iconName).tag(style)
-                            }
+                if !hasStarted {
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Profile Label")
+                                .font(.caption).bold().foregroundColor(.secondary)
+                            TextField("e.g. Sanjay (Default), Reading Glasses", text: $profileName)
+                                .textFieldStyle(.roundedBorder)
                         }
-                        .pickerStyle(.menu)
 
-                        Text(selectedStyle.description)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding()
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Appearance Style")
+                                .font(.caption).bold().foregroundColor(.secondary)
 
-                HStack {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
-
-                    Button("Begin Capture") {
-                        let finalName = profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? selectedStyle.rawValue
-                            : profileName
-                        hasStarted = true
-                        controller.startEnrollment(name: finalName, style: selectedStyle)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            } else {
-                VStack(spacing: 16) {
-                    if !controller.isComplete {
-                        CameraPreviewView(session: controller.previewSession)
-                            .frame(width: 260, height: 195)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor, lineWidth: 2))
-                    } else {
-                        FaceIDScanView(state: .success, size: 90)
-                    }
-
-                    Text(controller.statusMessage)
-                        .font(.callout)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 300)
-
-                    HStack(spacing: 14) {
-                        if controller.isComplete {
-                            Button("Done") {
-                                dismiss()
+                            Picker("Style", selection: $selectedStyle) {
+                                ForEach(ProfileStyle.allCases) { style in
+                                    Label(style.rawValue, systemImage: style.iconName).tag(style)
+                                }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .pickerStyle(.menu)
+
+                            Text(selectedStyle.description)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding()
+                    .liquidGlassCard(cornerRadius: 14)
+
+                    HStack {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .buttonStyle(.bordered)
+
+                        Spacer()
+
+                        Button("Begin Capture") {
+                            let finalName = profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? selectedStyle.rawValue
+                                : profileName
+                            hasStarted = true
+                            controller.startEnrollment(name: finalName, style: selectedStyle)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                } else {
+                    VStack(spacing: 16) {
+                        if !controller.isComplete {
+                            CameraPreviewView(session: controller.previewSession)
+                                .frame(width: 260, height: 195)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.cyan, lineWidth: 2))
                         } else {
-                            Button("Cancel") {
-                                controller.reset()
-                                dismiss()
+                            FaceIDScanView(state: .success, size: 90)
+                        }
+
+                        Text(controller.statusMessage)
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 300)
+
+                        HStack(spacing: 14) {
+                            if controller.isComplete {
+                                Button("Done") {
+                                    dismiss()
+                                }
+                                .buttonStyle(.borderedProminent)
+                            } else {
+                                Button("Cancel") {
+                                    controller.reset()
+                                    dismiss()
+                                }
+                                .buttonStyle(.bordered)
                             }
-                            .buttonStyle(.bordered)
                         }
                     }
+                    .padding()
                 }
-                .padding()
             }
+            .padding(26)
+            .frame(width: 440)
         }
-        .padding(26)
-        .frame(width: 440)
     }
 }
 
-// MARK: - Password Setup Modal Sheet (With Show/Hide Password Eye Toggle)
+// MARK: - Password Setup Modal Sheet
 
 private struct PasswordSetupModalView: View {
     @Environment(\.dismiss) private var dismiss
@@ -602,85 +642,102 @@ private struct PasswordSetupModalView: View {
     @State private var errorMessage: String = ""
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image("AppLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 50, height: 50)
-                .shadow(color: Color.cyan.opacity(0.3), radius: 6, x: 0, y: 2)
+        ZStack {
+            VisualEffectBlur(material: .popover, blendingMode: .behindWindow)
+                .ignoresSafeArea()
 
-            Text("Set Mac Login Password")
-                .font(.title3).bold()
+            VStack(spacing: 16) {
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 50, height: 50)
+                    .shadow(color: Color.cyan.opacity(0.4), radius: 8, x: 0, y: 3)
 
-            Text("Your password is encrypted and stored in your device's local macOS Keychain. Lookt uses it only to unlock your Mac upon a verified Face ID match.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+                Text("Set Mac Login Password")
+                    .font(.title3).bold()
 
-            VStack(alignment: .leading, spacing: 10) {
+                Text("Your password is encrypted and stored in your device's local macOS Keychain. Lookt uses it only to unlock your Mac upon a verified Face ID match.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Mac Login Password")
+                            .font(.caption).bold().foregroundColor(.secondary)
+
+                        HStack {
+                            if showPassword {
+                                TextField("Enter your Mac password", text: $password)
+                                    .textFieldStyle(.plain)
+                            } else {
+                                SecureField("Enter your Mac password", text: $password)
+                                    .textFieldStyle(.plain)
+                            }
+
+                            Button {
+                                showPassword.toggle()
+                            } label: {
+                                Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.12)))
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Confirm Password")
+                            .font(.caption).bold().foregroundColor(.secondary)
+
+                        if showPassword {
+                            TextField("Re-enter your Mac password", text: $confirmPassword)
+                                .textFieldStyle(.roundedBorder)
+                        } else {
+                            SecureField("Re-enter your Mac password", text: $confirmPassword)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
+
+                    if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                }
+                .padding()
+                .liquidGlassCard(cornerRadius: 14)
+
                 HStack {
-                    if showPassword {
-                        TextField("Mac Login Password", text: $password)
-                            .textFieldStyle(.roundedBorder)
-                    } else {
-                        SecureField("Mac Login Password", text: $password)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    Button {
-                        showPassword.toggle()
-                    } label: {
-                        Image(systemName: showPassword ? "eye.slash" : "eye")
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help(showPassword ? "Hide password" : "Show password")
-                }
-
-                if showPassword {
-                    TextField("Confirm Password", text: $confirmPassword)
-                        .textFieldStyle(.roundedBorder)
-                } else {
-                    SecureField("Confirm Password", text: $confirmPassword)
-                        .textFieldStyle(.roundedBorder)
-                }
-
-                if !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(.caption2)
-                        .foregroundColor(.red)
-                }
-            }
-            .padding(12)
-
-            HStack {
-                Button("Cancel") {
-                    dismiss()
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button("Save Password") {
-                    guard !password.isEmpty else {
-                        errorMessage = "Password cannot be empty."
-                        return
-                    }
-                    guard password == confirmPassword else {
-                        errorMessage = "Passwords do not match."
-                        return
-                    }
-
-                    if KeychainStore.saveLoginPassword(password) {
+                    Button("Cancel") {
                         dismiss()
-                    } else {
-                        errorMessage = "Failed to save password to Keychain."
                     }
+                    .buttonStyle(.bordered)
+
+                    Spacer()
+
+                    Button("Save Securely") {
+                        guard !password.isEmpty else {
+                            errorMessage = "Password cannot be empty."
+                            return
+                        }
+                        guard password == confirmPassword else {
+                            errorMessage = "Passwords do not match."
+                            return
+                        }
+                        let ok = KeychainStore.saveLoginPassword(password)
+                        if ok {
+                            dismiss()
+                        } else {
+                            errorMessage = "Failed to store in Keychain."
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
+            .padding(26)
+            .frame(width: 420)
         }
-        .padding(24)
-        .frame(width: 380)
     }
 }

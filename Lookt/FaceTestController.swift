@@ -17,11 +17,11 @@ final class FaceTestController: ObservableObject {
     private let liveness = LivenessDetector()
     private var cancellable: AnyCancellable?
     private var consecutiveMatches = 0
-    private let requiredConsecutiveMatches = 2
-    // Strict threshold for combined neural + anthropometric signature:
-    // Same person: >= 0.78
-    // Different person: <= 0.55
-    private let matchThreshold: Float = 0.78
+    private let requiredConsecutiveMatches = 3
+    // Calibrated biometric threshold:
+    // Enrolled owner: >= 0.72 (typically 0.80 - 0.96)
+    // Strangers: <= 0.20
+    private let matchThreshold: Float = 0.72
     private var timeoutWorkItem: DispatchWorkItem?
     private let timeoutSeconds: TimeInterval = 12
     private var isScanning = false

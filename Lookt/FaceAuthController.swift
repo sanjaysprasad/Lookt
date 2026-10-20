@@ -16,7 +16,7 @@ final class FaceAuthController {
     private var cancellable: AnyCancellable?
     private var timeoutWorkItem: DispatchWorkItem?
     private var consecutiveMatches = 0
-    private let requiredConsecutiveMatches = 2
+    private let requiredConsecutiveMatches = 3
     // Strict threshold: same person is >= 0.72 (typically 0.76-0.90), strangers are <= 0.50
     private let matchThreshold: Float = 0.72
     private var isAuthenticating = false

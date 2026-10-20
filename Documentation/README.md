@@ -95,6 +95,23 @@ Select the **Lookt** scheme, choose **My Mac (Mac Catalyst or macOS)**, and pres
 
 ---
 
+## 🤝 Acknowledgements & Open Source Credits
+
+- **MobileFaceNet (ArcFace)**: Sheng Chen et al. Deep face recognition architecture trained with additive angular margin loss.
+- **[FaceGate-Mac](https://github.com/dweep-desai/FaceGate-Mac)** by [@dweep-desai](https://github.com/dweep-desai): Pre-compiled CoreML weights reference and normalization pipeline under the MIT License.
+- **Apple CoreML & Vision**: For hardware-accelerated on-device neural processing.
+
+---
+
+## 👤 Author & Maintainer
+
+**Sanjay Sivaprasad**  
+- **Email**: [sjp.builds@gmail.com](mailto:sjp.builds@gmail.com)  
+- **GitHub**: [@sanjaysprasad](https://github.com/sanjaysprasad)
+
+---
+
 ## 📄 License
 
-Lookt is released under the **MIT License**. See [LICENSE](LICENSE) for details.
+Lookt is released under the **MIT License**. See [LICENSE](../LICENSE) for details.  
+Copyright (c) 2026 Sanjay Sivaprasad <sjp.builds@gmail.com>.

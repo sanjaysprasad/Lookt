@@ -104,6 +104,18 @@ Lookt is built with pride on the shoulders of the open-source community:
 
 ---
 
+## 👤 Author & Maintainer
+
+**Sanjay Sivaprasad**  
+- **Email**: [sjp.builds@gmail.com](mailto:sjp.builds@gmail.com)  
+- **GitHub**: [@sanjaysprasad](https://github.com/sanjaysprasad)  
+- **Project**: [Lookt Repository](https://github.com/sanjaysprasad/Lookt)
+
+Feel free to reach out with questions, feedback, or contribution proposals!
+
+---
+
 ## 📄 License
 
-Lookt is released under the **MIT License**. See [LICENSE](LICENSE) for details.
+Lookt is released under the **MIT License**. See [LICENSE](LICENSE) for details.  
+Copyright (c) 2026 Sanjay Sivaprasad <sjp.builds@gmail.com>.

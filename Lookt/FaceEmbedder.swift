@@ -1,3 +1,16 @@
+//
+//  FaceEmbedder.swift
+//  Lookt
+//
+//  Created by Sanjay Sivaprasad.
+//  Copyright (c) 2026 Sanjay Sivaprasad <sjp.builds@gmail.com>. All rights reserved.
+//  Licensed under the MIT License.
+//
+//  Acknowledgements:
+//  - MobileFaceNet (ArcFace) neural network architecture (Sheng Chen et al.).
+//  - CoreML model pipeline reference adapted from FaceGate-Mac by Dweep Desai (MIT License).
+//
+
 import Vision
 import CoreImage
 import CoreGraphics

@@ -149,7 +149,7 @@ final class OverlayPanelController {
         p.isOpaque = false
         p.hasShadow = false
         p.hidesOnDeactivate = false
-        p.setContentSize(NSSize(width: 340, height: 95))
+        p.setContentSize(NSSize(width: 380, height: 100))
         panel = p
         positionAtNotch()
     }
@@ -192,6 +192,9 @@ final class OverlayPanelController {
         dispatchPrecondition(condition: .onQueue(.main))
         hideWorkItem?.cancel()
         hideWorkItem = nil
-        panel?.orderOut(nil)
+        NotificationCenter.default.post(name: NSNotification.Name("RetractDynamicIsland"), object: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak self] in
+            self?.panel?.orderOut(nil)
+        }
     }
 }

@@ -59,7 +59,7 @@ struct LiquidGlassCardModifier: ViewModifier {
                             stops: [
                                 .init(color: Color.white.opacity(specularOpacity), location: 0.0),
                                 .init(color: Color.white.opacity(0.12), location: 0.35),
-                                .init(color: Color.cyan.opacity(0.20), location: 0.65),
+                                .init(color: Color.green.opacity(0.18), location: 0.65),
                                 .init(color: Color.white.opacity(0.18), location: 1.0)
                             ],
                             startPoint: .topLeading,

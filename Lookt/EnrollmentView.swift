@@ -27,7 +27,7 @@ struct EnrollmentView: View {
 
             // Dynamic Apple Liquid Glass ambient caustics
             RadialGradient(
-                colors: [Color.cyan.opacity(0.12), Color.clear],
+                colors: [Color.green.opacity(0.12), Color.clear],
                 center: .topLeading,
                 startRadius: 20,
                 endRadius: 420
@@ -99,7 +99,7 @@ struct EnrollmentView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 66, height: 66)
-                .shadow(color: Color.cyan.opacity(0.4), radius: 10, x: 0, y: 4)
+                .shadow(color: Color.green.opacity(0.35), radius: 10, x: 0, y: 4)
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
@@ -211,9 +211,9 @@ struct EnrollmentView: View {
                         HStack(spacing: 14) {
                             Image(systemName: profile.style.iconName)
                                 .font(.title3)
-                                .foregroundColor(.cyan)
+                                .foregroundColor(.green)
                                 .frame(width: 32, height: 32)
-                                .background(Circle().fill(Color.cyan.opacity(0.14)))
+                                .background(Circle().fill(Color.green.opacity(0.14)))
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(profile.name)
@@ -542,7 +542,7 @@ private struct EnrollmentModalView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 54, height: 54)
-                    .shadow(color: Color.cyan.opacity(0.4), radius: 8, x: 0, y: 3)
+                    .shadow(color: Color.green.opacity(0.35), radius: 8, x: 0, y: 3)
 
                 Text("Add Face Profile")
                     .font(.title2).bold()
@@ -598,7 +598,7 @@ private struct EnrollmentModalView: View {
                             CameraPreviewView(session: controller.previewSession)
                                 .frame(width: 260, height: 195)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.cyan, lineWidth: 2))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.green, lineWidth: 2))
                         } else {
                             FaceIDScanView(state: .success, size: 90)
                         }
@@ -651,7 +651,7 @@ private struct PasswordSetupModalView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 50, height: 50)
-                    .shadow(color: Color.cyan.opacity(0.4), radius: 8, x: 0, y: 3)
+                    .shadow(color: Color.green.opacity(0.35), radius: 8, x: 0, y: 3)
 
                 Text("Set Mac Login Password")
                     .font(.title3).bold()

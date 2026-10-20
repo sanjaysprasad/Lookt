@@ -474,7 +474,7 @@ private struct FaceTestSection: View {
 
             if isRunning || test.scanState != .idle {
                 VStack(spacing: 14) {
-                    DynamicIslandView(state: test.scanState, subtitle: test.resultMessage)
+                    DynamicIslandView(state: test.scanState, subtitle: test.resultMessage, isNotchStyle: false)
                         .frame(height: 72)
 
                     HStack(alignment: .center, spacing: 16) {

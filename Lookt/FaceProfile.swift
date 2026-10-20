@@ -50,10 +50,9 @@ struct FaceProfile: Identifiable, Codable, Equatable {
         self.embeddings = embeddings
     }
 
-    /// Legacy profiles used the old naive geometric pairwise distance formula (1,770 floats).
-    /// Modern neural profiles use Apple's Vision neural engine feature print + anthropometric features (778 floats).
+    /// Profiles using MobileFaceNet 512-dimensional ArcFace neural embeddings.
     var isNeural: Bool {
         guard let length = embeddings.first?.count else { return false }
-        return length != 1770 && length > 500
+        return length == 512
     }
 }

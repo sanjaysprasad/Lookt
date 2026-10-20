@@ -16,9 +16,11 @@ final class FaceAuthController {
     private var cancellable: AnyCancellable?
     private var timeoutWorkItem: DispatchWorkItem?
     private var consecutiveMatches = 0
-    private let requiredConsecutiveMatches = 3
-    // Strict threshold: same person is >= 0.72 (typically 0.76-0.90), strangers are <= 0.50
-    private let matchThreshold: Float = 0.72
+    private let requiredConsecutiveMatches = 2
+    // MobileFaceNet ArcFace threshold:
+    // Owner across angles: >= 0.58 (typically 0.68 - 0.88)
+    // Strangers: <= 0.35
+    private let matchThreshold: Float = 0.58
     private var isAuthenticating = false
     private var displaySleepAssertion: IOPMAssertionID = 0
     private var lastWrongFaceAlertTime: Date?

@@ -74,7 +74,11 @@ struct EnrollmentView: View {
 
     private var headerSection: some View {
         HStack(alignment: .center, spacing: 18) {
-            FaceIDScanView(state: isLooktEnabled && !profiles.isEmpty ? .success : .idle, size: 70)
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 70, height: 70)
+                .shadow(color: Color.cyan.opacity(0.35), radius: 8, x: 0, y: 3)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
@@ -435,7 +439,13 @@ private struct EnrollmentModalView: View {
     @State private var hasStarted = false
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 54, height: 54)
+                .shadow(color: Color.cyan.opacity(0.3), radius: 6, x: 0, y: 2)
+
             Text("Add Face Profile")
                 .font(.title2).bold()
 
@@ -533,7 +543,13 @@ private struct PasswordSetupModalView: View {
     @State private var errorMessage: String = ""
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 50, height: 50)
+                .shadow(color: Color.cyan.opacity(0.3), radius: 6, x: 0, y: 2)
+
             Text("Set Mac Login Password")
                 .font(.title3).bold()
 

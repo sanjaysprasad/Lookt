@@ -10,7 +10,7 @@ final class OverlayPanelController {
     private var cancellables = Set<AnyCancellable>()
     private var hideWorkItem: DispatchWorkItem?
 
-                                                                                                                                                                                                                                                                                    func start() {
+    func start() {
         NotificationCenter.default.publisher(for: .looktScanStarted)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in

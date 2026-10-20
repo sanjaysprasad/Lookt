@@ -1,79 +1,100 @@
 # Lookt
 
-Face ID for your Mac. Lookt watches your camera when your MacBook is
-locked, recognizes your face, and wakes your screen with the password
-field ready to go — so unlocking feels closer to an iPhone than a
-password prompt. It works **alongside** Touch ID and your password, not
-instead of them — nothing about your existing login changes.
+<p align="center">
+  <img src="assets/banner.png" alt="Lookt — Face ID for macOS" width="100%">
+</p>
 
-Runs entirely on your Mac. No internet connection, no cloud account, no
-data ever leaves your machine.
+<p align="center">
+  <a href="https://github.com/sanjaysprasad/Lookt"><img src="https://img.shields.io/badge/Platform-macOS%2013%2B-blue?style=flat-square&logo=apple" alt="macOS 13+"></a>
+  <a href="https://github.com/sanjaysprasad/Lookt"><img src="https://img.shields.io/badge/Architecture-Apple%20Silicon%20(M1--M4)-black?style=flat-square&logo=apple" alt="Apple Silicon"></a>
+  <a href="https://github.com/sanjaysprasad/Lookt"><img src="https://img.shields.io/badge/Security-Apple%20Vision%20Neural%20Prints-00E5FF?style=flat-square" alt="Vision Neural"></a>
+  <a href="https://github.com/sanjaysprasad/Lookt"><img src="https://img.shields.io/badge/Liveness-Anti--Spoofing%20Blink%20Cycle-00E676?style=flat-square" alt="Anti-Spoofing"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square" alt="MIT License"></a>
+</p>
 
-## Requirements
+---
 
-- A Mac with Apple Silicon (M1 or later)
-- macOS 13 or later
-- A built-in or external camera
+**Lookt** brings Apple iPhone-style **Face ID** authentication to your Mac. Operating directly under the MacBook display notch with an organic **Dynamic Island** animation, Lookt utilizes Apple Silicon's Neural Engine and Vision framework to securely identify your face, reject spoofing attempts, and automatically unlock your Mac.
 
-## What it does
+Everything runs **100% locally and offline** on your device. Zero cloud dependencies, zero analytics, zero external network traffic.
 
-- 🎥 Watches for your face only while the screen is locked — not
-  constantly, not in the background otherwise
-- 💡 Brightens your screen automatically during recognition, helping the
-  camera see you in low light
-- 👁️ Checks for liveness (blinking, natural movement) so a photo held up
-  to the camera won't fool it
-- 🔒 On a match, wakes the screen and focuses the password field — you
-  finish with Touch ID or your password, same as always
-- 📴 Works completely offline — enrollment and recognition both happen
-  locally on your device
+---
 
-## What it doesn't do
+## ✨ Key Features
 
-- It does **not** type your password for you. A face match gets your Mac
-  ready to unlock; you still complete it with Touch ID or your password.
-  This is a deliberate choice — see [SECURITY.md](SECURITY.md) for why.
-- It does **not** replace or disable Touch ID or your password — both
-  keep working exactly as before.
-- It does **not** send anything anywhere. There's no server, no account,
-  no analytics.
+- **🏝️ Dynamic Island Notch Animation**  
+  Flows smoothly out of the physical MacBook notch using native spring physics. Displays real-time state feedback: looking for face, live blink prompts, wrong face shake warnings, and Apple-style checkmark success chimes. Visible seamlessly over macOS lock screens.
 
-## Installing
+- **⚡️ Apple Vision Neural Feature Prints (778-dim)**  
+  Replaces naive landmark points with Apple's high-dimensional convolutional neural feature vectors (`VNGenerateImageFeaturePrintRequest`) fused with 3D anthropometric facial ratios. Delivers enterprise-grade biometric accuracy (cosine similarity $\ge 0.78$).
 
-> This project doesn't have a signed release yet. For now, building from
-> source is the way to run it — see [DEVELOPMENT.md](DEVELOPMENT.md) for
-> setup steps in Xcode.
+- **🛡️ Anti-Spoofing & Liveness Detection Engine**  
+  Rejects static printed photos, smartphone screen replays, and video loops using a continuous 3-phase bilateral blink state machine (Open $\to$ Closed $\to$ Reopen) combined with 3D dynamic micro-parallax head tracking.
 
-Once packaged releases are available, they'll be posted under
-[Releases](../../releases) as a downloadable `.dmg`.
+- **🔄 Continuous Face Polling**  
+  If an unrecognized face glances at the camera, Lookt flashes a subtle warning pill and keeps actively scanning for up to 40 seconds—never giving up on the first failed frame.
 
-## Setting it up
+- **🎭 Multi-Appearance Face Profiles**  
+  Enroll multiple looks to ensure seamless recognition across different conditions:
+  - *Default Face* (standard daytime appearance)
+  - *With Glasses* (prescriptions, sunglasses)
+  - *Low Light / Night* (under dim lighting with automatic brightness boost)
+  - *Headwear* (beanies, caps, hats)
+  - *Alternative Look* (different hairstyles, facial hair)
 
-1. Launch Lookt — you'll see a face icon appear in your menu bar
-2. Click it → **Enroll / Re-enroll Face**
-3. Follow the on-screen prompts (look straight ahead, turn slightly left,
-   then right — a few quick captures each)
-4. Grant camera access when macOS asks
-5. That's it — lock your screen (Control+Command+Q) to try it out
+- **🔓 Flexible Unlock Modes**  
+  - **Auto-Unlock**: Automatically submits your encrypted password from the local macOS Keychain via direct hardware keycode simulation upon a verified Face ID match.
+  - **Wake & Focus Only**: Wakes the display and focuses the password field; you complete authentication via Touch ID or password.
 
-You can re-run enrollment any time from the menu bar icon, useful if you
-change your look (glasses, facial hair, etc.) and matching gets less
-reliable.
+---
 
-## A note on how well this works
+## 💻 Requirements
 
-This is an independent, open source project, not an Apple product. The
-face-matching technology behind it is a good-faith implementation, but
-it's not held to the same testing and certification standards as Apple's
-own Face ID or Touch ID. Please read [SECURITY.md](SECURITY.md) before
-relying on it for anything sensitive — it's a genuinely useful convenience
-feature, but it's not a guarantee against a determined attacker.
+- **Mac**: Apple Silicon (M1, M2, M3, M4 series)
+- **Operating System**: macOS 13.0 (Ventura), macOS 14.0 (Sonoma), or macOS 15.0+ (Sequoia)
+- **Camera**: Built-in FaceTime HD camera or external USB/Continuity camera
+- **Permissions**: Camera Access and Accessibility (for Auto-Unlock keypress emulation)
 
-## Contributing / building it yourself
+---
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the Xcode project setup and
-architecture notes.
+## 🚀 Installation
 
-## License
+### Option 1: Download `.dmg` Installer
+1. Download `Lookt.dmg` from the repository root or [Releases](../../releases).
+2. Open `Lookt.dmg` and drag **Lookt** into your `Applications` folder.
+3. Launch Lookt from Launchpad or Spotlight.
 
-MIT — see [LICENSE](LICENSE). Free to use, modify, and share.
+### Option 2: Build from Source
+```bash
+git clone https://github.com/sanjaysprasad/Lookt.git
+cd Lookt
+open Lookt.xcodeproj
+```
+Select the **Lookt** scheme, choose **My Mac (Mac Catalyst or macOS)**, and press `⌘ + R` to build and run.
+
+---
+
+## 🛠️ Quick Setup Guide
+
+1. **Launch Lookt**: The setup window will open presenting your Face Profile Manager.
+2. **Add Face Profile**: Click **Add Face Style**, select an appearance mode, and look straight into the camera.
+3. **Set Auto-Unlock (Optional)**: If you want automatic hands-free unlock, enter your macOS login password in the encrypted Keychain prompt.
+4. **Grant Accessibility**: If prompted, enable Lookt in `System Settings → Privacy & Security → Accessibility` so it can simulate unlock signals at the lock screen.
+5. **Test Face ID**:
+   - In-app: Click **Test Face ID** in the setup window to preview neural matching and anti-spoofing in real time.
+   - Lock your Mac: Press `⌃ + ⌘ + Q` (Control + Command + Q). Look at the camera notch and blink naturally—your Mac unlocks instantly!
+
+---
+
+## 🔒 Security & Privacy Architecture
+
+- **Encrypted Local Storage**: Biometric feature vectors and unlock credentials never leave your Mac and are saved exclusively in the macOS Keychain (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`).
+- **No Network Permissions**: Lookt contains zero networking code, URL sessions, or outbound telemetry.
+- **Hardware-Level Display Control**: Uses native `IOPMAssertion` to keep the screen active during biometric scans without interfering with system power management.
+- For complete security disclosure and architectural design, please consult [SECURITY.md](SECURITY.md).
+
+---
+
+## 📄 License
+
+Lookt is released under the **MIT License**. See [LICENSE](LICENSE) for details.

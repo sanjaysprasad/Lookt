@@ -100,18 +100,22 @@ final class LivenessDetector {
             }
         }
 
-        // Check if verified by recent blink (within 2.5s) or verified by live micro-motion (within 1.5s)
+        // Security rule: Unlocking strictly requires an intentional, verified bilateral BLINK.
+        // Passive micro-motion confirms a 3D subject is in view, but NEVER unlocks alone.
         let now = Date()
-        let blinkValid = lastBlinkTime != nil && now.timeIntervalSince(lastBlinkTime!) < 2.5
+        let blinkValid = lastBlinkTime != nil && now.timeIntervalSince(lastBlinkTime!) < 2.2
         let motionValid = lastLivingMotionTime != nil && now.timeIntervalSince(lastLivingMotionTime!) < 1.5
 
-        if blinkValid || motionValid {
-            statusHint = "Live face verified"
+        if blinkValid {
+            statusHint = "Blink verified • Authenticating"
             return true
+        } else if motionValid {
+            statusHint = "Face detected • Blink to unlock"
+            return false
         } else {
             hasVerifiedBlinkRecently = false
             if !isEyesCurrentlyClosed {
-                statusHint = "Blink or look at camera"
+                statusHint = "Looking for face…"
             }
             return false
         }

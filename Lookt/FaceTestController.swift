@@ -17,11 +17,15 @@ final class FaceTestController: ObservableObject {
     private let liveness = LivenessDetector()
     private var cancellable: AnyCancellable?
     private var consecutiveMatches = 0
-    private let requiredConsecutiveMatches = 2
-    // MobileFaceNet ArcFace threshold:
-    // Owner across angles: >= 0.58 (typically 0.68 - 0.88)
-    // Strangers: <= 0.35
-    private let matchThreshold: Float = 0.58
+    private let requiredConsecutiveMatches = 3
+    private var matchThreshold: Float {
+        let level = UserDefaults.standard.string(forKey: "securityLevel") ?? "High Security"
+        switch level {
+        case "Maximum Security": return 0.75
+        case "Standard": return 0.65
+        default: return 0.70
+        }
+    }
     private var timeoutWorkItem: DispatchWorkItem?
     private let timeoutSeconds: TimeInterval = 12
     private var isScanning = false

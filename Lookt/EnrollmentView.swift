@@ -3,6 +3,7 @@ import SwiftUI
 struct EnrollmentView: View {
     @AppStorage("isLooktEnabled") private var isLooktEnabled = true
     @AppStorage("unlockMode") private var unlockModeRaw = UnlockMode.autoUnlock.rawValue
+    @AppStorage("securityLevel") private var securityLevel = "High Security"
     @AppStorage("boostBrightness") private var boostBrightness = true
 
     @StateObject private var loginItem = LoginItemManager()
@@ -28,6 +29,11 @@ struct EnrollmentView: View {
 
                 // Face Profiles Manager
                 profilesSection
+
+                Divider()
+
+                // Biometric Security Level Configuration
+                securitySection
 
                 Divider()
 
@@ -254,6 +260,44 @@ struct EnrollmentView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var securitySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Biometric Security Level", systemImage: "shield.checkered")
+                    .font(.headline)
+                Spacer()
+                Text(securityLevel)
+                    .font(.caption).bold()
+                    .foregroundColor(securityLevel == "Maximum Security" ? .purple : (securityLevel == "High Security" ? .green : .blue))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.secondary.opacity(0.12)))
+            }
+
+            Picker("Security Level", selection: $securityLevel) {
+                Text("Standard").tag("Standard")
+                Text("High Security").tag("High Security")
+                Text("Maximum Security").tag("Maximum Security")
+            }
+            .pickerStyle(.segmented)
+
+            Text(securityDescription)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var securityDescription: String {
+        switch securityLevel {
+        case "Maximum Security":
+            return "Maximum Security (Cosine >= 0.75): Ultra-strict threshold + mandatory bilateral blink. Strictly isolates owner from biological relatives and lookalikes."
+        case "Standard":
+            return "Standard (Cosine >= 0.65): Balanced recognition for low lighting + mandatory bilateral blink."
+        default:
+            return "High Security (Cosine >= 0.70, Recommended): Prevents mothers, parents, and siblings from unlocking while guaranteeing fast owner recognition upon blinking."
         }
     }
 

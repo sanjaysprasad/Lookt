@@ -5,11 +5,15 @@ import Combine
 /// Displays a sleek Dynamic Island expanding organically out of the MacBook notch
 /// elevated above the lock screen and all desktop windows.
 final class OverlayPanelController {
+    static let shared = OverlayPanelController()
+
     private var panel: NSPanel?
     private var hostingController: NSHostingController<DynamicIslandView>?
     private var cancellables = Set<AnyCancellable>()
     private var hideWorkItem: DispatchWorkItem?
     private var isShowingSuccess = false
+
+    init() {}
 
     func start() {
         NotificationCenter.default.publisher(for: .looktScanStarted)
@@ -45,8 +49,8 @@ final class OverlayPanelController {
                 guard let self = self else { return }
                 self.isShowingSuccess = true
                 let sub = note.userInfo?["subtitle"] as? String ?? "Welcome back"
-                self.show(state: .success, subtitle: sub, autoHideAfter: 1.8)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
+                self.show(state: .success, subtitle: sub, autoHideAfter: 2.2)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
                     self?.isShowingSuccess = false
                 }
             }
@@ -92,6 +96,32 @@ final class OverlayPanelController {
         }
     }
 
+    /// Plays the full authentic Dynamic Island notch animation sequence on the screen.
+    func testAnimationSequence() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        isShowingSuccess = false
+        hideWorkItem?.cancel()
+
+        // 1. Drop down from notch: Scanning / Searching for face
+        show(state: .scanning, subtitle: "Looking for face…")
+
+        // 2. Face Detected
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self = self else { return }
+            self.show(state: .scanning, subtitle: "Face Detected • Blink to unlock")
+        }
+
+        // 3. Apple Lock Shackle Spring -> Green Checkmark -> Chime -> Unlocked
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
+            guard let self = self else { return }
+            self.isShowingSuccess = true
+            self.show(state: .success, subtitle: "Welcome back", autoHideAfter: 2.2)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
+                self?.isShowingSuccess = false
+            }
+        }
+    }
+
     private func ensurePanelCreated() {
         guard panel == nil else { return }
         let initialView = DynamicIslandView(state: .idle, subtitle: "")
@@ -104,9 +134,9 @@ final class OverlayPanelController {
         p.titlebarAppearsTransparent = true
         p.isFloatingPanel = true
 
-        // Crucial: allow display directly over the macOS lock screen / login window
+        // Display above all desktop windows, full screen apps, and lock screen
         p.canBecomeVisibleWithoutLogin = true
-        p.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()) + 25)
+        p.level = .screenSaver
 
         p.collectionBehavior = [
             .canJoinAllSpaces,
@@ -124,7 +154,7 @@ final class OverlayPanelController {
         positionAtNotch()
     }
 
-    private func show(state: ScanState, subtitle: String = "", autoHideAfter: TimeInterval? = nil) {
+    func show(state: ScanState, subtitle: String = "", autoHideAfter: TimeInterval? = nil) {
         dispatchPrecondition(condition: .onQueue(.main))
         hideWorkItem?.cancel()
 
@@ -145,7 +175,6 @@ final class OverlayPanelController {
 
     private func positionAtNotch() {
         guard let panel = panel else { return }
-        // When screen is locked, NSScreen.main can be nil -> fallback to NSScreen.screens.first
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
         let screenFrame = screen.frame
@@ -159,7 +188,7 @@ final class OverlayPanelController {
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
-    private func hide() {
+    func hide() {
         dispatchPrecondition(condition: .onQueue(.main))
         hideWorkItem?.cancel()
         hideWorkItem = nil

@@ -40,6 +40,7 @@ final class FaceTestController: ObservableObject {
         scanState = .scanning
         resultMessage = "Scanning… Look at camera and blink"
         matchedProfileInfo = ""
+        OverlayPanelController.shared.show(state: .scanning, subtitle: "Looking for face…")
 
         camera.requestAccessAndStart { [weak self] granted in
             guard let self = self else { return }
@@ -61,6 +62,7 @@ final class FaceTestController: ObservableObject {
         timeoutWorkItem?.cancel()
         timeoutWorkItem = nil
         camera.stop()
+        OverlayPanelController.shared.hide()
     }
 
     func reset() {
@@ -77,6 +79,7 @@ final class FaceTestController: ObservableObject {
             self.stop()
             self.scanState = .failed
             self.resultMessage = "Authentication timed out — face did not match or blink not detected."
+            OverlayPanelController.shared.show(state: .failed, subtitle: "Authentication timed out", autoHideAfter: 2.0)
         }
         timeoutWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + timeoutSeconds, execute: work)
@@ -143,6 +146,7 @@ final class FaceTestController: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.scanState = .success
+                OverlayPanelController.shared.show(state: .success, subtitle: "Welcome back", autoHideAfter: 2.2)
                 self.matchedProfileInfo = matchedName
                 self.resultMessage = String(format: "✅ Matched: %@ (Score: %.2f)", matchedName, finalScore)
                 self.stop()

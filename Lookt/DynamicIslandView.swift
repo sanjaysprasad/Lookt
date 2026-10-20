@@ -166,8 +166,9 @@ struct DynamicIslandView: View {
                         y: 6
                     )
             )
+            .offset(y: isExpanded ? 0 : -32)
             .offset(x: shakeOffset)
-            .animation(.spring(response: 0.36, dampingFraction: 0.62), value: isExpanded)
+            .animation(.spring(response: 0.40, dampingFraction: 0.65), value: isExpanded)
             .animation(.spring(response: 0.36, dampingFraction: 0.62), value: state)
 
             Spacer()

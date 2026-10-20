@@ -373,10 +373,17 @@ private struct FaceTestSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Test Face ID", systemImage: "sparkle.magnifyingglass")
+                Label("Dynamic Island & Face ID", systemImage: "sparkle.magnifyingglass")
                     .font(.headline)
 
                 Spacer()
+
+                Button {
+                    OverlayPanelController.shared.testAnimationSequence()
+                } label: {
+                    Label("Test Notch Island", systemImage: "sparkles")
+                }
+                .buttonStyle(.bordered)
 
                 Button(isRunning ? "Stop Test" : (test.scanState == .idle ? "Test Face ID" : "Try Again")) {
                     if isRunning {
@@ -388,32 +395,40 @@ private struct FaceTestSection: View {
                         isRunning = true
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .disabled(profiles.isEmpty || !profiles.contains(where: \.isNeural))
             }
 
             if isRunning || test.scanState != .idle {
-                HStack(alignment: .center, spacing: 20) {
-                    CameraPreviewView(session: test.previewSession)
-                        .frame(width: 180, height: 135)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
-                        .opacity(isRunning ? 1.0 : 0.4)
+                VStack(spacing: 14) {
+                    DynamicIslandView(state: test.scanState, subtitle: test.resultMessage)
+                        .frame(height: 72)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        FaceIDScanView(state: test.scanState, size: 80)
+                    HStack(alignment: .center, spacing: 16) {
+                        CameraPreviewView(session: test.previewSession)
+                            .frame(width: 180, height: 130)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+                            .opacity(isRunning ? 1.0 : 0.4)
 
-                        if !test.resultMessage.isEmpty {
-                            Text(test.resultMessage)
-                                .font(.callout).bold()
-                                .foregroundColor(test.scanState == .success ? .green : (test.scanState == .failed ? .red : .primary))
+                        VStack(alignment: .leading, spacing: 8) {
+                            if !test.resultMessage.isEmpty {
+                                Text(test.resultMessage)
+                                    .font(.callout).bold()
+                                    .foregroundColor(test.scanState == .success ? .green : (test.scanState == .failed ? .red : .primary))
+                            }
+
+                            if isRunning {
+                                Text(String(format: "Neural Similarity: %.2f  (Match: >= 0.58)", test.lastScore))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+
+                                Text("Look directly at camera and blink naturally to authenticate.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
-
-                        if isRunning {
-                            Text(String(format: "Score: %.2f (Blink + move gently)", test.lastScore))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        Spacer()
                     }
                 }
                 .padding(14)

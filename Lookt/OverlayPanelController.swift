@@ -9,32 +9,59 @@ final class OverlayPanelController {
     private var hostingController: NSHostingController<DynamicIslandView>?
     private var cancellables = Set<AnyCancellable>()
     private var hideWorkItem: DispatchWorkItem?
+    private var isShowingSuccess = false
 
     func start() {
         NotificationCenter.default.publisher(for: .looktScanStarted)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in
+                guard let self = self, !self.isShowingSuccess else { return }
                 let sub = note.userInfo?["subtitle"] as? String ?? "Looking for face…"
-                self?.show(state: .scanning, subtitle: sub)
+                self.show(state: .scanning, subtitle: sub)
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .looktFaceSearching)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                guard let self = self, !self.isShowingSuccess else { return }
+                let sub = note.userInfo?["subtitle"] as? String ?? "Looking for face…"
+                self.show(state: .scanning, subtitle: sub)
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .looktFaceDetected)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                guard let self = self, !self.isShowingSuccess else { return }
+                let sub = note.userInfo?["subtitle"] as? String ?? "Face Detected • Blink to unlock"
+                self.show(state: .scanning, subtitle: sub)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktMatched)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in
+                guard let self = self else { return }
+                self.isShowingSuccess = true
                 let sub = note.userInfo?["subtitle"] as? String ?? "Welcome back"
-                self?.show(state: .success, subtitle: sub, autoHideAfter: 2.2)
+                self.show(state: .success, subtitle: sub, autoHideAfter: 1.8)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
+                    self?.isShowingSuccess = false
+                }
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktWrongFace)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in
+                guard let self = self, !self.isShowingSuccess else { return }
                 let sub = note.userInfo?["subtitle"] as? String ?? "Face Not Recognized"
-                self?.show(state: .failed, subtitle: sub)
+                self.show(state: .failed, subtitle: sub)
                 // After 1.2s of wrong face alert, return to continuous scanning
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    self?.show(state: .scanning, subtitle: "Looking for face…")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                    guard let strongSelf = self, !strongSelf.isShowingSuccess else { return }
+                    strongSelf.show(state: .scanning, subtitle: "Looking for face…")
                 }
             }
             .store(in: &cancellables)
@@ -42,14 +69,21 @@ final class OverlayPanelController {
         NotificationCenter.default.publisher(for: .looktFailed)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in
+                guard let self = self, !self.isShowingSuccess else { return }
                 let sub = note.userInfo?["subtitle"] as? String ?? "Use Touch ID or Password"
-                self?.show(state: .failed, subtitle: sub, autoHideAfter: 2.5)
+                self.show(state: .failed, subtitle: sub, autoHideAfter: 2.5)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .looktScanEnded)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.hide() }
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                // Let the victory unlock animation finish in full glory!
+                if !self.isShowingSuccess {
+                    self.hide()
+                }
+            }
             .store(in: &cancellables)
 
         // Pre-create panel so it is immediately ready when screen locks
@@ -85,7 +119,7 @@ final class OverlayPanelController {
         p.isOpaque = false
         p.hasShadow = false
         p.hidesOnDeactivate = false
-        p.setContentSize(NSSize(width: 320, height: 90))
+        p.setContentSize(NSSize(width: 340, height: 95))
         panel = p
         positionAtNotch()
     }

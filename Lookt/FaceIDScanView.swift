@@ -16,7 +16,9 @@ struct FaceIDScanView: View {
     @State private var rotation: Double = 0
     @State private var laserOffset: CGFloat = -35
     @State private var shakeOffset: CGFloat = 0
-    @State private var checkmarkScale: CGFloat = 0.5
+    @State private var successStage: Int = 0
+    @State private var lockScale: CGFloat = 0.6
+    @State private var checkmarkScale: CGFloat = 0.4
     @State private var rippleScale: CGFloat = 0.8
     @State private var rippleOpacity: Double = 0.8
 
@@ -85,11 +87,21 @@ struct FaceIDScanView: View {
                         )
 
                 case .success:
-                    Image(systemName: "checkmark")
-                        .font(.system(size: size * 0.44, weight: .semibold))
-                        .foregroundColor(.green)
-                        .scaleEffect(checkmarkScale)
-                        .transition(.scale.combined(with: .opacity))
+                    ZStack {
+                        if successStage == 1 {
+                            Image(systemName: "lock.open.fill")
+                                .font(.system(size: size * 0.40, weight: .semibold))
+                                .foregroundColor(.green)
+                                .scaleEffect(lockScale)
+                                .transition(.scale.combined(with: .opacity))
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: size * 0.44, weight: .semibold))
+                                .foregroundColor(.green)
+                                .scaleEffect(checkmarkScale)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
 
                 case .failed:
                     Image(systemName: "faceid")
@@ -144,15 +156,22 @@ struct FaceIDScanView: View {
     }
 
     private func triggerSuccessAnimation() {
-        checkmarkScale = 0.4
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.52)) {
-            checkmarkScale = 1.15
+        successStage = 1
+        lockScale = 0.6
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.48)) {
+            lockScale = 1.15
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) {
+                self.successStage = 2
+                self.checkmarkScale = 1.15
+            }
         }
 
         rippleScale = 0.85
         rippleOpacity = 0.9
         withAnimation(.easeOut(duration: 0.7)) {
-            rippleScale = 1.3
+            rippleScale = 1.35
             rippleOpacity = 0.0
         }
 

@@ -24,6 +24,8 @@ final class FaceAuthController {
     private var isAuthenticating = false
     private var displaySleepAssertion: IOPMAssertionID = 0
     private var lastWrongFaceAlertTime: Date?
+    private var noFaceFrames = 0
+    private var isFaceInCamera = false
 
     func beginAuthAttempt() {
         startAuthAttempt()
@@ -95,6 +97,8 @@ final class FaceAuthController {
         brightness.restore()
         releaseDisplaySleepAssertion()
         consecutiveMatches = 0
+        noFaceFrames = 0
+        isFaceInCamera = false
         liveness.reset()
 
         if notifyScanEnded {
@@ -103,13 +107,41 @@ final class FaceAuthController {
     }
 
     private func subscribeToCamera(referenceEmbeddings: [FaceEmbedding]) {
+        noFaceFrames = 0
+        isFaceInCamera = false
         cancellable = camera.framePublisher
             .receive(on: DispatchQueue.global(qos: .userInteractive))
-            .compactMap { [weak self] frame in self?.embedder.embed(frame) }
-            .sink { [weak self] result in
-                self?.processFrame(embedding: result.embedding,
-                                    landmarks: result.landmarks,
-                                    reference: referenceEmbeddings)
+            .sink { [weak self] frame in
+                guard let self = self, self.isAuthenticating else { return }
+
+                if let result = self.embedder.embed(frame) {
+                    self.noFaceFrames = 0
+                    if !self.isFaceInCamera {
+                        self.isFaceInCamera = true
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(
+                                name: .looktFaceDetected,
+                                object: nil,
+                                userInfo: ["subtitle": "Face Detected • Blink to unlock"]
+                            )
+                        }
+                    }
+                    self.processFrame(embedding: result.embedding,
+                                      landmarks: result.landmarks,
+                                      reference: referenceEmbeddings)
+                } else {
+                    self.noFaceFrames += 1
+                    if self.noFaceFrames >= 6 && self.isFaceInCamera {
+                        self.isFaceInCamera = false
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(
+                                name: .looktFaceSearching,
+                                object: nil,
+                                userInfo: ["subtitle": "Looking for face…"]
+                            )
+                        }
+                    }
+                }
             }
     }
 
@@ -212,4 +244,6 @@ extension Notification.Name {
     static let looktFailed = Notification.Name("LooktFailed")
     static let looktScanStarted = Notification.Name("LooktScanStarted")
     static let looktScanEnded = Notification.Name("LooktScanEnded")
+    static let looktFaceDetected = Notification.Name("LooktFaceDetected")
+    static let looktFaceSearching = Notification.Name("LooktFaceSearching")
 }
